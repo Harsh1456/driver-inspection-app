@@ -22,7 +22,7 @@ class UploadedFile(db.Model):
     # Relationship with report pages
     pages = db.relationship('ReportPage', backref='file', lazy=True, cascade='all, delete-orphan')
     # Relationship with vehicle inspections
-    inspection = db.relationship('VehicleInspection', backref='file', uselist=False, lazy=True)
+    inspection = db.relationship('VehicleInspection', backref='file', uselist=False, lazy=True, cascade='all, delete-orphan')
     # Relationship with edits
     edits = db.relationship('InspectionEdit', backref='file', lazy=True, cascade='all, delete-orphan')
     
