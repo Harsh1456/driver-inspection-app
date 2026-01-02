@@ -30,6 +30,22 @@ db.init_app(app)
 file_uploader = FileUploader(app.config['UPLOAD_FOLDER'], app.config['ALLOWED_EXTENSIONS'])
 
 # Initialize AI components
+classifier = None
+text_extractor = None
+
+try:
+    classifier = RemarkClassifier(app.config['YOLO_MODEL_PATH'])
+except Exception as e:
+    classifier = None
+
+try:
+    api_key = app.config.get('OPENAI_API_KEY')
+    if api_key and not api_key.startswith('your-openai-api-key'):
+        text_extractor = TextExtractor(api_key)
+except Exception as e:
+    text_extractor = None
+
+# Initialize AI components
 app.register_blueprint(dashboard_bp)
 
 @app.route('/')
