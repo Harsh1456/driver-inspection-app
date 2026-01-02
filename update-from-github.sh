@@ -44,10 +44,6 @@ sudo chmod 755 /home/ubuntu/driver-inspection-app/ultralytics_cache
 sudo chown ubuntu:ubuntu update-from-github.sh
 chmod +x update-from-github.sh
 
-# Remove Backup (Because it will occupy space)
-echo "Removing Backup File"
-sudo rm -rf /home/ubuntu/driver-inspection-backup-*
-
 # 6. Restart services
 echo "Restarting services..."
 sudo systemctl start driver-inspection
