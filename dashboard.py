@@ -34,18 +34,44 @@ def dashboard():
 
 @dashboard_bp.route('/api/files')
 def get_files_api():
-    """API endpoint to get uploaded files data"""
-    files = UploadedFile.query.order_by(UploadedFile.upload_timestamp.desc()).all()
+    """API endpoint to get uploaded files data with filtering"""
+    # Get filter parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search = request.args.get('search', '')
+    date_filter = request.args.get('date', '')
     
-    files_data = []
-    for file in files:
-        file_data = file.to_dict()
-        files_data.append(file_data)
+    # Build query
+    query = UploadedFile.query
+    
+    # Apply search filter
+    if search:
+        query = query.filter(UploadedFile.file_name.ilike(f'%{search}%'))
+    
+    # Apply date filter
+    if date_filter:
+        try:
+            # Convert date string to datetime
+            filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
+            # Filter by date part only (ignore time)
+            query = query.filter(db.func.date(UploadedFile.upload_timestamp) == filter_date)
+        except ValueError:
+            # If date format is invalid, ignore the filter
+            pass
+    
+    # Get paginated results
+    paginated_files = query.order_by(UploadedFile.upload_timestamp.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    files_data = [file.to_dict() for file in paginated_files.items]
     
     return jsonify({
         'success': True,
         'files': files_data,
-        'total': len(files_data)
+        'total': paginated_files.total,
+        'page': paginated_files.page,
+        'pages': paginated_files.pages
     })
 
 @dashboard_bp.route('/file/<file_id>')
