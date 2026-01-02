@@ -5,9 +5,6 @@ import os
 from PIL import Image
 import logging
 
-# Set Ultralytics cache directory before importing YOLO
-os.environ['ULTRALYTICS_HOME'] = '/home/ubuntu/driver-inspection-app/ultralytics_cache'
-
 logger = logging.getLogger(__name__)
 
 class RemarkClassifier:
@@ -24,10 +21,6 @@ class RemarkClassifier:
         try:
             if not os.path.exists(self.model_path):
                 raise FileNotFoundError(f"YOLO model not found at {self.model_path}")
-            
-            # Ensure cache directory exists and has proper permissions
-            cache_dir = os.environ.get('ULTRALYTICS_HOME', '/home/ubuntu/driver-inspection-app/ultralytics_cache')
-            os.makedirs(cache_dir, exist_ok=True)
             
             self.model = YOLO(self.model_path)
             logger.info("YOLO model loaded successfully")
