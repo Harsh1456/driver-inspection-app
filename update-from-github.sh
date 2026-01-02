@@ -41,6 +41,8 @@ sudo chown ubuntu:www-data /home/ubuntu/driver-inspection-app/*.py
 sudo chmod 644 /home/ubuntu/driver-inspection-app/*.py
 sudo chmod 755 /home/ubuntu/driver-inspection-app/uploads
 sudo chmod 755 /home/ubuntu/driver-inspection-app/ultralytics_cache
+sudo chown ubuntu:ubuntu update-from-github.sh
+chmod +x update-from-github.sh
 
 # 6. Restart services
 echo "Restarting services..."
