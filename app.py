@@ -2,12 +2,14 @@ from flask import Flask, request, jsonify, render_template, send_from_directory,
 import os
 import uuid
 import json
+import io
 from datetime import datetime
 from werkzeug.utils import secure_filename
+from PIL import Image  # Add this import
 
 # Import modules
 from config import Config
-from database import db, UploadedFile, ReportPage
+from database import db, UploadedFile, ReportPage, VehicleInspection, InspectionEdit
 from uploader import FileUploader
 from classifier import RemarkClassifier
 from extractor import TextExtractor
@@ -15,8 +17,11 @@ from dashboard import dashboard_bp
 
 import traceback
 
-# Set Ultralytics cache directory before importing YOLO
+# Set Ultralytics cache directory at the VERY TOP, before any imports
 os.environ['ULTRALYTICS_HOME'] = '/home/ubuntu/driver-inspection-app/ultralytics_cache'
+
+# Now set the TORCH_HOME environment variable as well
+os.environ['TORCH_HOME'] = '/home/ubuntu/driver-inspection-app/torch_cache'
 
 # Initialize Flask app
 app = Flask(__name__, 
@@ -25,24 +30,38 @@ app = Flask(__name__,
             template_folder='templates')
 app.config.from_object(Config)
 
-# Initialize components
+# Initialize database
 db.init_app(app)
+
+# Initialize components
 file_uploader = FileUploader(app.config['UPLOAD_FOLDER'], app.config['ALLOWED_EXTENSIONS'])
 
-# Initialize AI components
+# Initialize AI components with better error handling
 classifier = None
 text_extractor = None
 
+print("Initializing AI components...")
+print(f"YOLO model path from config: {app.config['YOLO_MODEL_PATH']}")
+print(f"Model file exists: {os.path.exists(app.config['YOLO_MODEL_PATH'])}")
+
 try:
     classifier = RemarkClassifier(app.config['YOLO_MODEL_PATH'])
+    print("✓ YOLO classifier initialized successfully")
 except Exception as e:
+    print(f"✗ YOLO classifier initialization failed: {e}")
+    print(traceback.format_exc())
     classifier = None
 
 try:
     api_key = app.config.get('OPENAI_API_KEY')
     if api_key and not api_key.startswith('your-openai-api-key'):
         text_extractor = TextExtractor(api_key)
+        print("✓ Text extractor initialized successfully")
+    else:
+        print("✗ OpenAI API key not configured properly")
+        text_extractor = None
 except Exception as e:
+    print(f"✗ Text extractor initialization failed: {e}")
     text_extractor = None
 
 # Initialize AI components
@@ -71,7 +90,8 @@ def upload_file():
         
         # Check if AI components are available
         if classifier is None:
-            return jsonify({'success': False, 'error': 'YOLO classifier not available'}), 500
+            print("ERROR: Classifier is None at upload time")
+            return jsonify({'success': False, 'error': 'YOLO classifier not available. Check server logs.'}), 500
         if text_extractor is None:
             return jsonify({'success': False, 'error': 'Text extractor not available. Please check OpenAI API key configuration.'}), 500
         
@@ -86,6 +106,8 @@ def upload_file():
         return jsonify(process_result)
         
     except Exception as e:
+        print(f"Upload error: {e}")
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def process_uploaded_file(file_info):
@@ -108,6 +130,7 @@ def process_uploaded_file(file_info):
         
         # Convert file to images
         images_dir = os.path.join(app.config['UPLOAD_FOLDER'], file_id)
+        os.makedirs(images_dir, exist_ok=True)
         image_paths = []
         
         if file_type.lower() == 'pdf':
@@ -274,6 +297,7 @@ def process_uploaded_file(file_info):
     except Exception as e:
         db.session.rollback()
         print(f"Error processing file: {str(e)}")
+        traceback.print_exc()
         return {
             'success': False,
             'error': str(e)
@@ -575,6 +599,8 @@ def save_edit(file_id):
             signature_data=data.get('signature_data'),
             signature_type=data.get('signature_type'),
             signer_name=data.get('signer_name'),
+            signer_role=data.get('signer_role'),
+            signature_date=data.get('signature_date'),
             edited_remarks=data.get('edited_remarks'),
             original_remarks=data.get('original_remarks')
         )
