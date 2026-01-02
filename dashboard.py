@@ -86,7 +86,20 @@ def file_detail(file_id):
 def file_detail_api(file_id):
     """API endpoint for file details"""
     file = UploadedFile.query.get_or_404(file_id)
-    pages = ReportPage.query.filter_by(file_id=file_id).order_by(ReportPage.page_number).all()
+    
+    # Get filter parameter
+    filter_type = request.args.get('filter', 'all')
+    
+    # Base query
+    query = ReportPage.query.filter_by(file_id=file_id)
+    
+    # Apply filters
+    if filter_type == 'with_remarks':
+        query = query.filter_by(has_remarks=True)
+    elif filter_type == 'without_remarks':
+        query = query.filter_by(has_remarks=False)
+        
+    pages = query.order_by(ReportPage.page_number).all()
     
     file_data = file.to_dict()
     pages_data = [page.to_dict() for page in pages]
