@@ -1,0 +1,315 @@
+/* Custom styles for the inspection report processor */
+
+/* Elegant multi-layer gradient background: subtle green waves fading into pristine white */
+.bg-gradient-radial {
+    background: 
+        /* Subtle linear overlay for directional elegance */
+        linear-gradient(135deg, 
+            rgba(208, 245, 217, 0.6) 0%, 
+            rgba(240, 253, 244, 0.4) 50%, 
+            rgba(255, 255, 255, 0.8) 100%
+        ),
+        /* Primary radial gradient with refined green shades for depth and serenity */
+        radial-gradient(ellipse at 30% 20%, 
+            #e8f5e8 0%,      /* Soft emerald green whisper */
+            #d4f4dc 25%,     /* Delicate mint infusion */
+            #f0fdf4 50%,     /* Ethereal light green haze */
+            #f8fff9 75%,     /* Ivory-tinted green veil */
+            #ffffff 100%     /* Immaculate white horizon */
+        ),
+        /* Faint conic for subtle rotational elegance (slow spin) */
+        conic-gradient(from 0deg at 80% 20%, 
+            transparent 0deg, 
+            rgba(184, 247, 208, 0.1) 90deg, 
+            transparent 180deg, 
+            rgba(240, 253, 244, 0.05) 270deg, 
+            transparent 360deg
+        );
+    background-attachment: fixed;
+    position: relative;
+}
+
+/* Enhanced animated gradient: gentle wave-like shift for sophistication */
+.bg-gradient-animated {
+    background: 
+        linear-gradient(-45deg, #e8f5e8, #d4f4dc, #f0fdf4, #f8fff9, #ffffff);
+    background-size: 600% 600%;
+    animation: elegantGradient 20s ease infinite;
+}
+
+@keyframes elegantGradient {
+    0% { background-position: 0% 50%; }
+    25% { background-position: 100% 50%; }
+    50% { background-position: 100% 100%; }
+    75% { background-position: 0% 100%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Elegant navigation with refined hover effects */
+.nav-link {
+    position: relative;
+    color: #4b5563;
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding-bottom: 4px;
+}
+
+.nav-link:hover {
+    color: #059669;
+    transform: translateY(-1px);
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0%;
+    height: 2px;
+    background: linear-gradient(90deg, #10b981, #059669);
+    transition: width 0.4s ease;
+    border-radius: 1px;
+}
+
+.nav-link:hover::after {
+    width: 100%;
+}
+
+.nav-link.active {
+    color: #059669;
+    font-weight: 600;
+}
+
+.nav-link.active::after {
+    width: 100%;
+}
+
+/* Refined card styles: frosted glass with soft green-tinted glow */
+.card-modern {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.06),
+        0 2px 8px rgba(0, 0, 0, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        0 0 0 1px rgba(16, 185, 129, 0.08); /* Subtle green inner glow */
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-modern:hover {
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.1),
+        0 4px 12px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        0 0 0 1px rgba(16, 185, 129, 0.12);
+    transform: translateY(-4px);
+}
+
+/* Loading animations with graceful spin */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+    animation: spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Sophisticated file upload zone: elegant lift on interaction */
+.upload-zone {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(12px);
+    border: 2px dashed rgba(16, 185, 129, 0.3);
+}
+
+.upload-zone.drag-over {
+    border-color: #10b981;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(240, 253, 244, 0.6));
+    transform: scale(1.02) translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
+}
+
+/* Polished criticality badges with gradient borders */
+.criticality-red {
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    color: #dc2626;
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.criticality-orange {
+    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    color: #ea580c;
+    border: 1px solid rgba(234, 88, 12, 0.2);
+    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.criticality-green {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Smooth progress bar with easing */
+.progress-bar {
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+/* Elegant table with layered borders */
+.table-modern {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.06),
+        0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Premium button styles: gradient with depth */
+.btn-modern {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: white;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+        0 4px 12px rgba(5, 150, 105, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.6s;
+}
+
+.btn-modern:hover::before {
+    left: 100%;
+}
+
+.btn-modern:hover {
+    background: linear-gradient(135deg, #047857, #059669);
+    transform: translateY(-2px);
+    box-shadow: 
+        0 8px 20px rgba(5, 150, 105, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.95);
+    color: #4b5563;
+    border: 1px solid rgba(209, 213, 219, 0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary:hover {
+    background: white;
+    border-color: #d1d5db;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Refined custom scrollbar: slim and polished */
+.scrollbar-thin::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(248, 250, 252, 0.8);
+    border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #cbd5e1, #e2e8f0);
+    border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #94a3b8, #cbd5e1);
+}
+
+/* Luxe glass morphism: higher contrast for elegance */
+.glass {
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Sophisticated gradient text with shine */
+.gradient-text {
+    background: linear-gradient(135deg, #059669, #10b981, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: relative;
+}
+
+.gradient-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    z-index: -1;
+}
+
+/* Responsive elegance: fluid on mobile */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .hero-text {
+        font-size: 2.5rem;
+    }
+    
+    .card-modern {
+        transform: none !important; /* Prevent lift on small screens */
+    }
+}
+
+/* Accessibility: refined focus with green aura */
+.focus-modern:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+/* Universal smooth transitions with cubic-bezier for polish */
+* {
+    transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Subtle body enhancement: faint vignette for depth */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, 
+        transparent 40%, 
+        rgba(0, 0, 0, 0.02) 100%
+    );
+    pointer-events: none;
+    z-index: -1;
+}

@@ -1,0 +1,12 @@
+numpy
+pillow
+opencv-python
+pdf2image
+flask
+werkzeug
+flask-sqlalchemy
+psycopg2-binary
+python-dotenv
+ultralytics
+openai
+gunicorn

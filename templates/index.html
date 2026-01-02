@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Inspection Processor{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="text-center py-20">
+    <div class="max-w-4xl mx-auto">
+        <!-- Badge -->
+        <div class="inline-flex items-center px-4 py-2 rounded-full bg-primary-50 border border-primary-200 text-primary-700 text-sm font-medium mb-8 shadow-sm">
+            <i class="fas fa-bolt text-primary-600 mr-2"></i>AI-Powered Processing
+        </div>
+        
+        <!-- Main heading -->
+        <h1 class="text-5xl md:text-6xl font-bold text-gray-800 mb-6 leading-tight">
+            Driver Inspection
+            <span class="gradient-text">Report Processor</span>
+        </h1>
+        
+        <!-- Subtitle -->
+        <p class="text-xl text-gray-600 mb-12 leading-relaxed max-w-2xl mx-auto">
+            Transform handwritten inspection reports into actionable data with our intelligent AI processing platform.
+        </p>
+        
+        <!-- CTA Buttons -->
+        <div class="flex flex-col sm:flex-row justify-center gap-6">
+            <a href="{{ url_for('upload_page') }}" class="btn-modern px-8 py-4 rounded-xl font-semibold flex items-center justify-center text-lg">
+                <i class="fas fa-upload mr-3"></i>Upload Reports
+            </a>
+            <a href="{{ url_for('dashboard.dashboard') }}" class="btn-secondary px-8 py-4 rounded-xl font-semibold flex items-center justify-center text-lg">
+                <i class="fas fa-chart-bar mr-3"></i>View Dashboard
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section class="py-20">
+    <div class="container mx-auto px-4">
+        <div class="text-center mb-16">
+            <h2 class="text-4xl font-bold text-gray-800 mb-4">How It Works</h2>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">Streamline your inspection workflow with our intelligent processing pipeline</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <!-- Feature 1 -->
+            <div class="card-modern text-center p-8 rounded-2xl transition-all duration-300">
+                <div class="w-20 h-20 bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
+                    <i class="fas fa-upload text-white text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-3 text-gray-800">1. Upload Reports</h3>
+                <p class="text-gray-600 leading-relaxed">Upload PDF or image files containing driver inspection reports with drag & drop simplicity</p>
+            </div>
+            
+            <!-- Feature 2 -->
+            <div class="card-modern text-center p-8 rounded-2xl transition-all duration-300">
+                <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
+                    <i class="fas fa-robot text-white text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-3 text-gray-800">2. AI Processing</h3>
+                <p class="text-gray-600 leading-relaxed">Advanced YOLO models detect handwritten remarks while GPT-4 extracts text with precision</p>
+            </div>
+            
+            <!-- Feature 3 -->
+            <div class="card-modern text-center p-8 rounded-2xl transition-all duration-300">
+                <div class="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
+                    <i class="fas fa-chart-line text-white text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-3 text-gray-800">3. View Results</h3>
+                <p class="text-gray-600 leading-relaxed">Monitor criticality levels and review extracted text in an intuitive, modern dashboard</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
