@@ -5,7 +5,9 @@ from PIL import Image
 import time
 import hashlib
 import pickle
+import pickle
 import os
+import json
 
 class TextExtractor:
     """ChatGPT API-based text extractor for handwritten remarks with batch processing and correction"""
@@ -767,4 +769,86 @@ class TextExtractor:
                 'text': '',
                 'confidence': 0.0,
                 'error': error_msg
+            }
+
+    def extract_header_info(self, image):
+        """
+        Extract header information (Carrier, Location, Date, Time, Truck Number, Odometer)
+        """
+        try:
+            if not self.client:
+                return {
+                    'success': False,
+                    'error': 'OpenAI API client not configured'
+                }
+            
+            # Convert image to base64
+            buffered = BytesIO()
+            enhanced_image = self.enhance_image_for_ocr(image)
+            enhanced_image.save(buffered, format="JPEG", quality=95)
+            img_base64 = base64.b64encode(buffered.getvalue()).decode()
+            
+            prompt = """
+            You are an expert data extraction system for Vehicle Inspection Reports.
+            
+            TASK: Extract the following header information from the report image:
+            1. Carrier Name (Company Name)
+            2. Location (City, State, or Facility)
+            3. Date (Inspection Date)
+            4. Time (Inspection Time)
+            5. Truck Number (Vehicle ID, Unit #)
+            6. Odometer Reading (Mileage)
+            
+            INSTRUCTIONS:
+            - Look for labeled fields like "Carrier:", "Location:", "Date:", "Time:", "Truck #:", "Odometer:"
+            - If a field is not found or illegible, return null
+            - Format Date as MM/DD/YYYY if possible
+            - Format Time as HH:MM AM/PM if possible
+            - Return the result strictly as a JSON object
+            
+            JSON FORMAT:
+            {
+                "carrier_name": "string or null",
+                "location": "string or null",
+                "date": "string or null",
+                "time": "string or null",
+                "truck_number": "string or null",
+                "odometer": "string or null"
+            }
+            """
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_base64}",
+                                "detail": "high"
+                            }
+                        }
+                    ]
+                }
+            ]
+            
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                max_tokens=300,
+                temperature=0.1,
+                response_format={"type": "json_object"}
+            )
+            
+            result_json = response.choices[0].message.content.strip()
+            return {
+                'success': True,
+                'data': json.loads(result_json)
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
             }
