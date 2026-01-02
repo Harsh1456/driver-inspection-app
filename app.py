@@ -9,47 +9,43 @@ from PIL import Image  # Add this import
 
 # Import modules
 from config import Config
-from database import db, UploadedFile, ReportPage, VehicleInspection, InspectionEdit
+from database import db, UploadedFile, ReportPage, VehicleInspection, InspectionEdit  # Make sure all models are imported
 from uploader import FileUploader
 from classifier import RemarkClassifier
 from extractor import TextExtractor
 from dashboard import dashboard_bp
 
-import traceback
-
-# Set Ultralytics cache directory at the VERY TOP, before any imports
-os.environ['ULTRALYTICS_HOME'] = '/home/ubuntu/driver-inspection-app/ultralytics_cache'
-
-# Now set the TORCH_HOME environment variable as well
-os.environ['TORCH_HOME'] = '/home/ubuntu/driver-inspection-app/torch_cache'
-
 # Initialize Flask app
-app = Flask(__name__, 
-            static_folder='static',
-            static_url_path='/static',
-            template_folder='templates')
+app = Flask(__name__)
 app.config.from_object(Config)
 
-# Initialize database
-db.init_app(app)
-
 # Initialize components
+db.init_app(app)
 file_uploader = FileUploader(app.config['UPLOAD_FOLDER'], app.config['ALLOWED_EXTENSIONS'])
 
-# Initialize AI components with better error handling
+# Initialize AI components with debugging
 classifier = None
 text_extractor = None
 
-print("Initializing AI components...")
-print(f"YOLO model path from config: {app.config['YOLO_MODEL_PATH']}")
-print(f"Model file exists: {os.path.exists(app.config['YOLO_MODEL_PATH'])}")
+print("=" * 50)
+print("Initializing AI Components...")
+print("=" * 50)
 
 try:
+    print(f"Attempting to load YOLO model from: {app.config['YOLO_MODEL_PATH']}")
+    print(f"Model file exists: {os.path.exists(app.config['YOLO_MODEL_PATH'])}")
+    
+    # Add some debugging
+    import torch
+    print(f"PyTorch version: {torch.__version__}")
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    
     classifier = RemarkClassifier(app.config['YOLO_MODEL_PATH'])
     print("✓ YOLO classifier initialized successfully")
 except Exception as e:
-    print(f"✗ YOLO classifier initialization failed: {e}")
-    print(traceback.format_exc())
+    print(f"✗ Failed to initialize classifier: {str(e)}")
+    import traceback
+    traceback.print_exc()
     classifier = None
 
 try:
@@ -61,10 +57,12 @@ try:
         print("✗ OpenAI API key not configured properly")
         text_extractor = None
 except Exception as e:
-    print(f"✗ Text extractor initialization failed: {e}")
+    print(f"✗ Failed to initialize text extractor: {str(e)}")
     text_extractor = None
 
-# Initialize AI components
+print("=" * 50)
+
+# Register blueprints
 app.register_blueprint(dashboard_bp)
 
 @app.route('/')
@@ -91,7 +89,7 @@ def upload_file():
         # Check if AI components are available
         if classifier is None:
             print("ERROR: Classifier is None at upload time")
-            return jsonify({'success': False, 'error': 'YOLO classifier not available. Check server logs.'}), 500
+            return jsonify({'success': False, 'error': 'YOLO classifier not available'}), 500
         if text_extractor is None:
             return jsonify({'success': False, 'error': 'Text extractor not available. Please check OpenAI API key configuration.'}), 500
         
@@ -106,7 +104,8 @@ def upload_file():
         return jsonify(process_result)
         
     except Exception as e:
-        print(f"Upload error: {e}")
+        print(f"Upload error: {str(e)}")
+        import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -653,5 +652,5 @@ if __name__ == '__main__':
     print(f"Template folder: {app.template_folder}")
     print(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
     
-    # Run the app with clean logs
+    # This is only for development
     app.run(debug=True, host='0.0.0.0', port=5000)
