@@ -11,3 +11,5 @@ ultralytics
 openai
 gunicorn
 openpyxl
+rembg
+onnxruntime

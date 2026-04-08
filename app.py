@@ -1,19 +1,28 @@
-from flask import Flask, request, jsonify, render_template, send_from_directory, send_file
+from flask import Flask, request, jsonify, render_template, send_file, url_for
 import os
 import uuid
 import json
-import io
 from datetime import datetime
+from io import BytesIO
 from werkzeug.utils import secure_filename
-from PIL import Image  # Add this import
 
 # Import modules
 from config import Config
-from database import db, UploadedFile, ReportPage, VehicleInspection, InspectionEdit  # Make sure all models are imported
+from database import db, UploadedFile, ReportPage
 from uploader import FileUploader
 from classifier import RemarkClassifier
 from extractor import TextExtractor
 from dashboard import dashboard_bp
+from database import db, UploadedFile, ReportPage, VehicleInspection, InspectionEdit
+import io
+import base64
+from PIL import Image
+
+try:
+    from rembg import new_session, remove
+except Exception:
+    new_session = None
+    remove = None
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -23,44 +32,47 @@ app.config.from_object(Config)
 db.init_app(app)
 file_uploader = FileUploader(app.config['UPLOAD_FOLDER'], app.config['ALLOWED_EXTENSIONS'])
 
-# Initialize AI components with debugging
+# Initialize AI components
 classifier = None
 text_extractor = None
-
-print("=" * 50)
-print("Initializing AI Components...")
-print("=" * 50)
+background_removal_session = None
+MAX_SIGNATURE_UPLOAD_BYTES = 5 * 1024 * 1024
+ALLOWED_SIGNATURE_FORMATS = {'JPEG', 'PNG', 'WEBP'}
 
 try:
-    print(f"Attempting to load YOLO model from: {app.config['YOLO_MODEL_PATH']}")
-    print(f"Model file exists: {os.path.exists(app.config['YOLO_MODEL_PATH'])}")
-    
-    # Add some debugging
-    import torch
-    print(f"PyTorch version: {torch.__version__}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    
     classifier = RemarkClassifier(app.config['YOLO_MODEL_PATH'])
-    print("✓ YOLO classifier initialized successfully")
 except Exception as e:
-    print(f"✗ Failed to initialize classifier: {str(e)}")
-    import traceback
-    traceback.print_exc()
     classifier = None
 
 try:
     api_key = app.config.get('OPENAI_API_KEY')
     if api_key and not api_key.startswith('your-openai-api-key'):
         text_extractor = TextExtractor(api_key)
-        print("✓ Text extractor initialized successfully")
-    else:
-        print("✗ OpenAI API key not configured properly")
-        text_extractor = None
 except Exception as e:
-    print(f"✗ Failed to initialize text extractor: {str(e)}")
     text_extractor = None
 
-print("=" * 50)
+if new_session is not None:
+    try:
+        # Warm the model once so it is cached for subsequent requests.
+        background_removal_session = new_session('u2net')
+    except Exception as e:
+        background_removal_session = None
+
+
+def get_background_removal_session():
+    """Create the rembg session once and reuse it across requests."""
+    global background_removal_session
+
+    if new_session is None:
+        return None
+
+    if background_removal_session is None:
+        try:
+            background_removal_session = new_session('u2net')
+        except Exception:
+            return None
+
+    return background_removal_session
 
 # Register blueprints
 app.register_blueprint(dashboard_bp)
@@ -88,7 +100,6 @@ def upload_file():
         
         # Check if AI components are available
         if classifier is None:
-            print("ERROR: Classifier is None at upload time")
             return jsonify({'success': False, 'error': 'YOLO classifier not available'}), 500
         if text_extractor is None:
             return jsonify({'success': False, 'error': 'Text extractor not available. Please check OpenAI API key configuration.'}), 500
@@ -104,9 +115,6 @@ def upload_file():
         return jsonify(process_result)
         
     except Exception as e:
-        print(f"Upload error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def process_uploaded_file(file_info):
@@ -129,7 +137,6 @@ def process_uploaded_file(file_info):
         
         # Convert file to images
         images_dir = os.path.join(app.config['UPLOAD_FOLDER'], file_id)
-        os.makedirs(images_dir, exist_ok=True)
         image_paths = []
         
         if file_type.lower() == 'pdf':
@@ -296,7 +303,6 @@ def process_uploaded_file(file_info):
     except Exception as e:
         db.session.rollback()
         print(f"Error processing file: {str(e)}")
-        traceback.print_exc()
         return {
             'success': False,
             'error': str(e)
@@ -304,9 +310,16 @@ def process_uploaded_file(file_info):
 
 @app.route('/image/<file_id>/<int:page_number>')
 def serve_image(file_id, page_number):
-    """Serve images"""
+    """Serve images, prioritizing edited versions if they exist (v8 Fix)"""
     try:
-        # Get page from database
+        # 1. Check if an edited version exists on disk
+        edited_filename = f"{file_id}_{page_number}.png"
+        edited_path = os.path.join(app.config['UPLOAD_FOLDER'], 'edited', edited_filename)
+        
+        if os.path.exists(edited_path):
+            return send_file(edited_path, mimetype='image/png')
+
+        # 2. Otherwise serve the original page from database
         page = ReportPage.query.filter_by(file_id=file_id, page_number=page_number).first()
         if not page or not page.image_path:
             return "Image not found", 404
@@ -586,71 +599,183 @@ def export_excel():
             'success': False,
             'error': str(e)
         }), 500
+@app.route('/api/reports/remove-background', methods=['POST'])
+def remove_signature_background():
+    """Remove background from an uploaded signature image and return a transparent PNG."""
+    try:
+        session = get_background_removal_session()
+        if remove is None or session is None:
+            return jsonify({
+                'success': False,
+                'message': 'Background removal service is not available on this server.'
+            }), 503
 
-@app.route('/api/file/<file_id>/edit', methods=['POST'])
-def save_edit(file_id):
-    """Save report edits and signature"""
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'No image file was provided.'
+            }), 400
+
+        upload = request.files['file']
+        sanitized_name = secure_filename(upload.filename or '')
+        if not sanitized_name:
+            return jsonify({
+                'success': False,
+                'message': 'Please choose a valid image file.'
+            }), 400
+
+        file_bytes = upload.read()
+        if not file_bytes:
+            return jsonify({
+                'success': False,
+                'message': 'The uploaded file is empty.'
+            }), 400
+
+        if len(file_bytes) > MAX_SIGNATURE_UPLOAD_BYTES:
+            return jsonify({
+                'success': False,
+                'message': 'Image size must be 5MB or smaller.'
+            }), 413
+
+        try:
+            image = Image.open(BytesIO(file_bytes))
+            image.load()
+        except Exception:
+            return jsonify({
+                'success': False,
+                'message': 'The uploaded file is not a valid image.'
+            }), 400
+
+        if image.format not in ALLOWED_SIGNATURE_FORMATS:
+            return jsonify({
+                'success': False,
+                'message': 'Supported formats are JPG, PNG, and WEBP.'
+            }), 400
+
+        output_bytes = remove(file_bytes, session=session)
+        return send_file(
+            BytesIO(output_bytes),
+            mimetype='image/png',
+            as_attachment=False,
+            download_name=f'{os.path.splitext(sanitized_name)[0]}_transparent.png'
+        )
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Background removal failed: {str(e)}'
+        }), 500
+
+@app.route('/report-editor/<file_id>')
+def report_editor(file_id):
+    """Serve the standalone Report Editor page"""
+    file = UploadedFile.query.get_or_404(file_id)
+    # Fetch all pages to build the navigation list
+    pages = ReportPage.query.filter_by(file_id=file_id).order_by(ReportPage.page_number).all()
+    
+    # Pre-serialize page data for the editor
+    pages_list = []
+    for p in pages:
+        pages_list.append({
+            'page_id': p.page_id,
+            'page_number': p.page_number,
+            'has_remarks': p.has_remarks,
+            'image_url': url_for('serve_image', file_id=file.file_id, page_number=p.page_number)
+        })
+    
+    return render_template('report_editor.html', 
+                          file=file, 
+                          pages=pages_list,
+                          initial_page=request.args.get('page', 1, type=int))
+                          
+@app.route('/api/file/<file_id>/save-canvas', methods=['POST'])
+def save_canvas_state(file_id):
+    """Save the Fabric.js canvas state and flattened image for a report page"""
     try:
         data = request.json
+        if not data:
+            return jsonify({'success': False, 'message': 'Invalid JSON payload'}), 400
+            
+        canvas_state = data.get('canvas_state')
+        page_number = data.get('page_number', 1)
+        image_data = data.get('image_data')
         
-        edit = InspectionEdit(
-            file_id=file_id,
-            signature_data=data.get('signature_data'),
-            signature_type=data.get('signature_type'),
-            signer_name=data.get('signer_name'),
-            signer_role=data.get('signer_role'),
-            signature_date=data.get('signature_date'),
-            edited_remarks=data.get('edited_remarks'),
-            original_remarks=data.get('original_remarks')
-        )
+        if not canvas_state:
+            return jsonify({'success': False, 'message': 'No canvas state provided'}), 400
+            
+        # 1. Save Canvas State to Database
+        try:
+            edit = InspectionEdit.query.filter_by(file_id=file_id, page_number=page_number).first()
+            
+            if not edit:
+                edit = InspectionEdit(file_id=file_id, page_number=page_number)
+                db.session.add(edit)
+                
+            edit.canvas_state = canvas_state
+            edit.edited_at = datetime.utcnow()
+        except Exception as db_err:
+            print(f"Database error in save_canvas_state: {str(db_err)}")
+            return jsonify({'success': False, 'message': f'Database error: {str(db_err)}'}), 500
         
-        db.session.add(edit)
+        # 2. Save Flattened Image to Disk if provided (v8 Fix)
+        if image_data and ',' in image_data:
+            try:
+                # Ensure directory exists
+                edited_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'edited')
+                os.makedirs(edited_dir, exist_ok=True)
+                
+                # Decode and save
+                header, encoded = image_data.split(',', 1)
+                img_bytes = base64.b64decode(encoded)
+                
+                filename = f"{file_id}_{page_number}.png"
+                save_path = os.path.join(edited_dir, filename)
+                
+                with open(save_path, 'wb') as f:
+                    f.write(img_bytes)
+            except Exception as img_err:
+                print(f"Error saving edited image to disk: {str(img_err)}")
+                # We don't return 500 here yet, as the database update might still be valuable
+                # But for diagnostics, we want to know if it fails.
+
         db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Report edits saved successfully',
-            'edit_id': edit.id
-        })
+        return jsonify({'success': True, 'message': 'Report edits saved successfully'})
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'message': f'Error saving edits: {str(e)}'
-        }), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
 
-@app.route('/api/file/<file_id>/edits', methods=['GET'])
-def get_edits(file_id):
-    """Get edit history for a file"""
+@app.route('/api/file/<file_id>/load-canvas', methods=['GET'])
+def load_canvas_state(file_id):
+    """Load the Fabric.js canvas state for a specific page"""
     try:
-        edits = InspectionEdit.query.filter_by(file_id=file_id).order_by(InspectionEdit.edited_at.desc()).all()
+        page_number = request.args.get('page_number', 1, type=int)
+        edit = InspectionEdit.query.filter_by(file_id=file_id, page_number=page_number).order_by(InspectionEdit.edited_at.desc()).first()
+        
+        if not edit or not edit.canvas_state:
+            return jsonify({
+                'success': True,
+                'canvas_state': None,
+                'message': 'No saved canvas found'
+            })
+            
         return jsonify({
             'success': True,
-            'edits': [edit.to_dict() for edit in edits]
+            'canvas_state': edit.canvas_state
         })
+        
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'Error fetching edits: {str(e)}'
+            'message': f'Error loading canvas: {str(e)}'
         }), 500
 
 # Create tables when app starts
 with app.app_context():
-    try:
-        db.create_all()
-        print("✓ Database tables created successfully")
-    except Exception as e:
-        print(f"✗ Database creation failed: {e}")
+    db.create_all()
 
 if __name__ == '__main__':
-    # Create upload directory if it doesn't exist
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    
-    print("Starting server on http://localhost:5000")
-    print(f"Static folder: {app.static_folder}")
-    print(f"Template folder: {app.template_folder}")
-    print(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
-    
     # This is only for development
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)

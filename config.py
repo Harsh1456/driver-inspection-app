@@ -18,11 +18,11 @@ class Config:
     
     # File upload settings
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
-    UPLOAD_FOLDER = '/home/ubuntu/driver-inspection-app/uploads'
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
     ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
     
     # AI/ML settings
-    YOLO_MODEL_PATH = '/home/ubuntu/driver-inspection-app/static/models/best.pt'
+    YOLO_MODEL_PATH = os.path.join(os.getcwd(), 'static', 'models', 'best.pt')
     
     # OpenAI API Key
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')

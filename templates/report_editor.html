@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Editor - {{ file.file_name }}</title>
+    <!-- Tailwind for layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Premium Cursive Selection -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Dancing+Script:wght@600&family=Alex+Brush&family=Great+Vibes&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Fabric.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Signature Pad -->
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .canvas-bg { background-color: #f1f3f5; }
+        .tool-btn { 
+            @apply flex items-center justify-center rounded-xl transition-all duration-200;
+            width: 44px; height: 44px; color: #94a3b8;
+        }
+        .tool-btn:hover { @apply bg-white shadow-sm text-gray-800; }
+        .tool-btn.active { @apply bg-white shadow-md text-indigo-600 ring-1 ring-indigo-100; }
+        
+        #canvas-wrapper { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+
+        /* Premium Signature Modal */
+        .sig-tab { @apply px-8 py-3 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all flex items-center space-x-2 border border-transparent; min-width: 140px; justify-content: center; }
+        .sig-tab.active { @apply bg-white shadow-xl shadow-indigo-100 text-indigo-600 border-indigo-50; }
+        .sig-tab:not(.active) { @apply text-gray-400 hover:text-gray-600 hover:bg-white/50; }
+        
+        .signature-plate {
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .preview-plate {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            position: relative;
+        }
+        .preview-plate::after {
+            content: '';
+            position: absolute;
+            bottom: 30%; left: 10%; right: 10%;
+            height: 1px; background: rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden bg-white">
+
+    <!-- Step 3: Header Section -->
+    <header class="h-16 border-b border-gray-100 px-6 flex items-center justify-between bg-white z-20">
+        <div class="flex items-center space-x-4">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                <i class="fas fa-edit"></i>
+            </div>
+            <div>
+                <h1 class="text-sm font-bold text-gray-900 tracking-tight">Report Editor</h1>
+                <p class="text-[11px] text-gray-500 font-medium uppercase tracking-widest">{{ file.file_name }}</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+             <button onclick="saveReport()" id="btn-save" class="px-6 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all flex items-center shadow-sm">
+                <i class="fas fa-save mr-2 text-indigo-500"></i> SAVE CHANGES
+            </button>
+            <button onclick="toggleDownloadMenu()" class="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-md active:translate-y-0.5">
+                <i class="fas fa-download mr-2"></i> EXPORT PDF
+            </button>
+            <div class="h-8 w-px bg-gray-100 mx-2"></div>
+            <button onclick="handleBack()" class="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Toolbar Section -->
+    <div class="h-14 bg-gray-50/50 border-b border-gray-100 px-6 flex items-center justify-between z-10">
+        <!-- Zoom Controls (Step 5) -->
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+                <button onclick="zoomOut()" class="p-2 text-gray-500 hover:text-indigo-600" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
+                <div id="zoom-label" onclick="resetZoom()" class="text-[11px] font-black text-gray-700 px-3 cursor-pointer select-none">100%</div>
+                <button onclick="zoomIn()" class="p-2 text-gray-500 hover:text-indigo-600" title="Zoom In"><i class="fas fa-search-plus"></i></button>
+            </div>
+            <button onclick="resetZoom()" class="text-[10px] font-bold text-gray-400 hover:text-indigo-500 uppercase tracking-widest">Fit to Height</button>
+        </div>
+
+        <!-- Navigation Section (Step 6) -->
+        <div class="flex items-center select-none">
+            <button onclick="navigate(-1)" id="btn-prev" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-900 disabled:opacity-20 transition-all">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="bg-white border border-gray-200 rounded-full px-5 py-1.5 shadow-sm">
+                <span id="page-counter" class="text-[11px] font-bold text-gray-600 tracking-tight uppercase">Loading Page...</span>
+            </div>
+            <button onclick="navigate(1)" id="btn-next" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-900 disabled:opacity-20 transition-all">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+
+        <!-- Tool Selection -->
+        <div class="flex items-center space-x-1">
+            <button onclick="setTool('select')" id="tool-select" class="tool-btn active" title="Select (V)"><i class="fas fa-mouse-pointer"></i></button>
+            <button onclick="setTool('text')" id="tool-text" class="tool-btn" title="Text (T)"><i class="fas fa-font"></i></button>
+            <div class="h-6 w-px bg-gray-200 mx-2"></div>
+            <div class="flex items-center space-x-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+                <button onclick="setTool('tick-green')" id="tool-tick-green" class="tool-btn hover:!bg-emerald-50 !w-8 !h-8" title="Green Tick"><i class="fas fa-check text-emerald-600"></i></button>
+                <button onclick="setTool('tick-black')" id="tool-tick-black" class="tool-btn hover:!bg-gray-100 !w-8 !h-8" title="Black Tick"><i class="fas fa-check text-black"></i></button>
+            </div>
+            <button onclick="openSignatureModal()" class="tool-btn" title="Signature (S)"><i class="fas fa-signature"></i></button>
+        </div>
+    </div>
+
+    <!-- Step 4: Main Workspace -->
+    <main id="canvas-container" class="flex-1 overflow-auto canvas-bg p-12 scrollbar-thin relative flex items-center justify-center">
+        <!-- Floating Context Menu -->
+        <div id="context-toolbar" class="absolute top-8 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-gray-100 px-5 py-3 hidden z-30 flex items-center space-x-6 animate-in slide-in-from-top-4 duration-300">
+             <div class="flex items-center space-x-3">
+                <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Font Size</span>
+                <input type="number" id="font-size" value="20" min="8" max="200" onchange="updateSelectedText()" class="w-12 bg-gray-50 border-0 rounded-lg text-center font-bold text-xs ring-1 ring-gray-200 focus:ring-indigo-500 py-1">
+            </div>
+            <div class="h-8 w-px bg-gray-100"></div>
+            <button onclick="deleteSelected()" class="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Remove Item</button>
+        </div>
+
+        <!-- Canvas Holder -->
+        <div id="canvas-wrapper" class="bg-white rounded-sm overflow-hidden transform-gpu">
+            <canvas id="report-canvas"></canvas>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loader" class="absolute inset-0 bg-white/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center space-y-4">
+            <div class="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-[10px] font-bold text-indigo-700 uppercase tracking-[0.2em] animate-pulse">Initializing Editor</p>
+        </div>
+    </main>
+
+    <!-- PDF Download Menu -->
+    <div id="download-menu" class="fixed right-6 top-32 w-64 bg-white rounded-[32px] shadow-2xl border border-gray-100 p-6 z-[100] hidden animate-in zoom-in-95 slide-in-from-right-10 duration-300">
+        <h3 class="text-sm font-bold text-gray-800 mb-6 flex items-center">
+            <i class="fas fa-file-pdf mr-2 text-red-500"></i> Export Settings
+        </h3>
+        <div class="space-y-3">
+            <button onclick="downloadPDF('single')" class="w-full text-left px-5 py-4 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 rounded-2xl text-xs font-bold transition-all flex items-center group">
+                <i class="fas fa-file-alt mr-4 text-indigo-400 group-hover:scale-110 transition-transform"></i> 
+                <span>This Report Only</span>
+            </button>
+            <button onclick="openMultiDownload()" class="w-full text-left px-5 py-4 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 rounded-2xl text-xs font-bold transition-all flex items-center group">
+                <i class="fas fa-copy mr-4 text-indigo-400 group-hover:scale-110 transition-transform"></i> 
+                <span>Select Multiple</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Multi-Download Modal -->
+    <div id="multi-dl-modal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-md z-[200] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border border-white/20">
+            <div class="px-8 py-8 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800">Combine Reports</h3>
+                    <p class="text-xs text-gray-500 font-medium">Select reports to include in the PDF bundle</p>
+                </div>
+                <button onclick="closeMultiDownload()" class="text-gray-400 hover:text-gray-900"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="max-h-96 overflow-y-auto p-8 space-y-2 scrollbar-thin" id="multi-dl-list">
+                <!-- Checkbox list items -->
+            </div>
+            <div class="px-8 py-8 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <button onclick="selectAllRemarks(true)" class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Select All Remarks</button>
+                <button onclick="generateCombinedPDF()" class="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-200">Export Combined</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Premium Signature Modal (v15 Overhaul) -->
+    <div id="sig-modal" class="fixed inset-0 bg-gray-900/60 backdrop-blur-xl z-[200] hidden flex items-center justify-center p-6 animate-in fade-in duration-300">
+        <div class="bg-white/95 rounded-[48px] shadow-2xl w-full max-w-5xl overflow-hidden border border-white/40 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+            <!-- Modal Header -->
+            <div class="px-12 py-10 border-b border-gray-100/50 flex items-center justify-between bg-white/50">
+                <div class="flex items-center space-x-5">
+                    <div class="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner">
+                        <i class="fas fa-signature text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-black text-gray-900 tracking-tight">Legal Authorization</h3>
+                        <p class="text-xs font-bold text-indigo-500/60 uppercase tracking-widest mt-1">Official Document Signature</p>
+                    </div>
+                </div>
+                <button onclick="closeSignatureModal()" class="w-12 h-12 flex items-center justify-center rounded-2xl hover:bg-red-50 hover:text-red-500 text-gray-300 transition-all">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="flex-1 overflow-y-auto p-12 custom-scrollbar">
+                <!-- Premium Tabs -->
+                <div class="flex items-center space-x-3 bg-gray-100/60 p-2 rounded-[24px] mb-12 w-fit mx-auto shadow-inner">
+                    <button onclick="switchSigTab('draw')" id="sig-tab-draw" class="sig-tab active">
+                        <i class="fas fa-pen-nib mr-2"></i><span>Draw</span>
+                    </button>
+                    <button onclick="switchSigTab('type')" id="sig-tab-type" class="sig-tab">
+                        <i class="fas fa-keyboard mr-2"></i><span>Type</span>
+                    </button>
+                    <button onclick="switchSigTab('upload')" id="sig-tab-upload" class="sig-tab">
+                        <i class="fas fa-upload mr-2"></i><span>Upload</span>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                    <!-- High-Performance Input Area -->
+                    <div class="lg:col-span-7 space-y-8">
+                        <div id="sig-panel-draw" class="space-y-6">
+                            <div class="relative group">
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]" id="sig-draw-guide">
+                                    <h2 class="text-6xl font-black italic uppercase tracking-[0.5em]">Sign Here</h2>
+                                </div>
+                                <div class="bg-white rounded-[40px] border-2 border-dashed border-gray-200 p-2 group-hover:border-indigo-400 transition-all shadow-2xl relative overflow-hidden signature-plate">
+                                    <canvas id="sig-pad" class="w-full h-64 rounded-[32px] bg-white cursor-crosshair relative z-10"></canvas>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between px-4">
+                                <div class="flex items-center space-x-4">
+                                    <button onclick="setSigInk('#000000')" class="w-8 h-8 rounded-full border-4 border-white shadow-lg bg-black active-ink" id="ink-black"></button>
+                                    <button onclick="setSigInk('#4f46e5')" class="w-8 h-8 rounded-full border-4 border-white shadow-lg bg-indigo-600" id="ink-indigo"></button>
+                                </div>
+                                <button onclick="clearSig()" class="flex items-center space-x-2 text-[10px] font-black text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest">
+                                    <i class="fas fa-undo-alt"></i><span>Reset Canvas</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="sig-panel-type" class="hidden space-y-8">
+                            <div class="space-y-4">
+                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Signature Text</label>
+                                <input type="text" id="sig-type-input" placeholder="Your Full Name" oninput="updateSigPreview()"
+                                    class="w-full px-8 py-5 bg-gray-50 border-0 rounded-[24px] focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-bold text-2xl text-gray-800 shadow-inner">
+                            </div>
+                            <div class="grid grid-cols-3 gap-4">
+                                <button onclick="setSigFont('Dancing Script')" id="font-dancing" class="p-4 border border-gray-100 rounded-2xl bg-white hover:border-indigo-200 transition-all font-['Dancing_Script'] text-2xl active-font">Style One</button>
+                                <button onclick="setSigFont('Alex Brush')" id="font-alex" class="p-4 border border-gray-100 rounded-2xl bg-white hover:border-indigo-200 transition-all font-['Alex_Brush'] text-2xl">Style Two</button>
+                                <button onclick="setSigFont('Great Vibes')" id="font-great" class="p-4 border border-gray-100 rounded-2xl bg-white hover:border-indigo-200 transition-all font-['Great_Vibes'] text-2xl">Style Three</button>
+                            </div>
+                        </div>
+
+                        <div id="sig-panel-upload" class="hidden space-y-6">
+                            <div class="relative group h-[340px]">
+                                <input type="file" id="sig-file-input" accept="image/*" onchange="handleSigUpload(this)"
+                                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                                <div class="h-full border-2 border-dashed border-gray-200 rounded-[40px] group-hover:border-indigo-400 group-hover:bg-indigo-50/20 transition-all flex flex-col items-center justify-center space-y-6 px-12 text-center shadow-inner">
+                                    <div class="w-20 h-20 bg-white rounded-[28px] shadow-2xl flex items-center justify-center text-indigo-500 transition-transform group-hover:scale-110">
+                                        <i class="fas fa-file-upload text-3xl"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-gray-800">Upload Image</h4>
+                                        <p class="text-[11px] text-gray-400 mt-2 uppercase font-bold tracking-widest">PNG, JPG or WEBP (Max 5MB)</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="sig-upload-loading" class="hidden items-center justify-center space-x-4 bg-indigo-50 py-4 rounded-2xl text-indigo-600 font-bold text-xs uppercase tracking-widest">
+                                <div class="w-5 h-5 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                <span>AI Processing Background...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Enhanced Live Preview Area -->
+                    <div class="lg:col-span-5 flex flex-col h-full">
+                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 ml-2">Live Verification</label>
+                        <div class="flex-1 bg-white rounded-[40px] border border-gray-100 flex items-center justify-center overflow-hidden p-10 min-h-[340px] shadow-2xl shadow-gray-100 preview-plate">
+                            <div id="sig-preview" class="w-full h-full flex flex-col items-center justify-center">
+                                <div class="opacity-10 text-center space-y-4">
+                                    <i class="fas fa-stamp text-7xl"></i>
+                                    <p class="text-xs font-black uppercase tracking-[1em]">ID Pending</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8 flex items-start space-x-4 bg-gray-50/80 p-6 rounded-3xl border border-gray-100">
+                            <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                <i class="fas fa-info-circle text-xs"></i>
+                            </div>
+                            <p class="text-[11px] text-gray-500 font-medium leading-relaxed">
+                                Our AI system will process your signature to ensure transparency. You can adjust the size once it's placed on the document.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-12 py-10 bg-gray-50/50 border-t border-gray-100/50 flex items-center justify-between">
+                <div class="flex items-center text-gray-400 space-x-3">
+                    <i class="fas fa-shield-alt"></i>
+                    <span class="text-[10px] font-bold uppercase tracking-widest">Encrypted Transmission</span>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <button onclick="closeSignatureModal()" class="px-8 py-4 text-xs font-black text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-all">Discard</button>
+                    <button onclick="applySignature()" class="px-12 py-4 bg-gray-900 text-white rounded-[24px] text-xs font-black uppercase tracking-widest shadow-2xl flex items-center space-x-3 hover:bg-gray-800 hover:-translate-y-1 transition-all active:translate-y-0">
+                        <span>Place Authoritatively</span>
+                        <i class="fas fa-arrow-right text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Step 6: Initialize Data from Server
+        const FILE_ID = "{{ file.file_id }}";
+        const ALL_PAGES = {{ pages | tojson | safe }};
+        const INITIAL_PAGE_NUM = parseInt("{{ initial_page }}") || 1;
+        
+        let remarksList = ALL_PAGES.filter(p => p.has_remarks);
+        let currentIndex = Math.max(remarksList.findIndex(p => p.page_number === INITIAL_PAGE_NUM), 0);
+        
+        let canvas = null;
+        let sigPad = null;
+        let currentTool = 'select';
+        let zoom = 1;
+        let baseScale = 1;
+        let isDirty = false;
+        let isSaving = false;
+
+        // Step 4.1: Initial Mount Logic
+        window.addEventListener('load', function() {
+            const container = document.getElementById('canvas-container');
+            
+            // Step 1: Initialize Fabric Canvas
+            canvas = new fabric.Canvas('report-canvas', {
+                backgroundColor: '#ffffff',
+                preserveObjectStacking: true,
+                selection: true
+            });
+            window.reportCanvas = canvas;
+
+            // Step 2: Load Initial Report
+            initEditor();
+            
+            // Global Listeners
+            initGlobalListeners();
+        });
+
+        async function initEditor() {
+            if (remarksList.length === 0) {
+                showError("No reports with remarks found.");
+                return;
+            }
+            
+            // Sync UI State
+            updateNavigation();
+            
+            // Load the current report
+            await loadReport(remarksList[currentIndex]);
+        }
+
+        // Step 4.2: Robust Image Loading Logic
+        async function loadReport(page) {
+            showSpinner(true);
+            const container = document.getElementById('canvas-container');
+            
+            try {
+                // 1. Fetch saved state first (v8 Persistence)
+                const res = await fetch(`/api/file/${FILE_ID}/load-canvas?page_number=${page.page_number}`);
+                const data = await res.json();
+                
+                // 2. Load the image base
+                fabric.Image.fromURL(page.image_url, function(img, isError) {
+                    if (isError || !img) {
+                        showError("Failed to load report image.");
+                        showSpinner(false);
+                        return;
+                    }
+
+                    // Height-fit scaling (Strict Requirement)
+                    const padding = 200;
+                    const viewH = container.clientHeight - padding;
+                    baseScale = viewH / img.height;
+                    
+                    if (baseScale > 1) baseScale = 1; // Don't upscale past 100%
+
+                    // Apply layout
+                    const scaledW = img.width * baseScale;
+                    const scaledH = img.height * baseScale;
+                    
+                    canvas.setDimensions({ width: scaledW, height: scaledH });
+                    
+                    // Reset internal coordinate system
+                    canvas.clear();
+                    canvas.setZoom(1);
+                    canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+                    canvas.calcOffset();
+
+                    // If state exists, load the JSON
+                    if (data.success && data.canvas_state) {
+                        canvas.loadFromJSON(data.canvas_state, function() {
+                            // Ensure background image is there and scaled
+                            setupBackground(img);
+                            canvas.renderAll();
+                            isDirty = false;
+                            showSpinner(false);
+                        });
+                    } else {
+                        setupBackground(img);
+                        canvas.renderAll();
+                        isDirty = false;
+                        showSpinner(false);
+                    }
+                }, { crossOrigin: 'anonymous' });
+
+            } catch (err) {
+                showError("Connection error. Please try again.");
+                showSpinner(false);
+            }
+        }
+
+        function setupBackground(img) {
+            img.set({
+                originX: 'left', originY: 'top',
+                left: 0, top: 0,
+                scaleX: baseScale, scaleY: baseScale,
+                selectable: false, evented: false,
+                isBackground: true
+            });
+            canvas.add(img);
+            canvas.sendToBack(img);
+        }
+
+        // Step 5: Zoom Controls (Fixed v14 Visibility)
+        const STEP = 0.15, MIN = 0.25, MAX = 4.0;
+        function applyZoom() {
+            // Get background image dimensions
+            const bgImg = canvas.getObjects('image').find(o => o.isBackground);
+            if (!bgImg) return;
+
+            // 1. Calculate the new physical size for the canvas element
+            const newW = bgImg.width * baseScale * zoom;
+            const newH = bgImg.height * baseScale * zoom;
+
+            // 2. Set dimensions of the actual HTML canvas element
+            canvas.setDimensions({ width: newW, height: newH });
+            
+            // 3. Update the Fabric zoom level
+            canvas.setZoom(zoom);
+            
+            // 4. Reset viewport to top-left to avoid cut-off during extreme zoom
+            canvas.viewportTransform = [zoom, 0, 0, zoom, 0, 0];
+            
+            // Update wrapper for aesthetic consistency
+            const wrapper = document.getElementById('canvas-wrapper');
+            wrapper.style.width = newW + 'px';
+            wrapper.style.height = newH + 'px';
+            
+            document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
+            canvas.renderAll();
+        }
+
+        function zoomIn() { zoom = Math.min(zoom + STEP, MAX); applyZoom(); }
+        function zoomOut() { zoom = Math.max(zoom - STEP, MIN); applyZoom(); }
+        function resetZoom() { zoom = 1; applyZoom(); }
+
+        // Step 6: Navigation Logic
+        function updateNavigation() {
+            document.getElementById('page-counter').textContent = `ITEM ${currentIndex + 1} OF ${remarksList.length}`;
+            document.getElementById('btn-prev').disabled = currentIndex === 0;
+            document.getElementById('btn-next').disabled = currentIndex === remarksList.length - 1;
+        }
+
+        async function navigate(direction) {
+            if (isDirty) {
+                if (!confirm("Discard unsaved changes?")) return;
+            }
+            currentIndex += direction;
+            zoom = 1;
+            applyZoom();
+            updateNavigation();
+            await loadReport(remarksList[currentIndex]);
+        }
+
+        // Step 7: Final Save Logic (Persistent and High Quality)
+        async function saveReport() {
+            if (isSaving) return;
+            isSaving = true;
+            const btn = document.getElementById('btn-save');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SAVING...';
+
+            try {
+                // Reset zoom for high-res snapshot
+                const oldZoom = canvas.getZoom();
+                canvas.setZoom(1);
+                
+                // Set dimensions to original unscaled bitmap size for best quality
+                const bgImg = canvas.getObjects('image').find(o => o.isBackground);
+                const originalW = bgImg.width;
+                const originalH = bgImg.height;
+                
+                // Temporarily scale everything up to 1:1
+                const vpt = canvas.viewportTransform;
+                const finalScale = 1 / baseScale;
+                canvas.setZoom(finalScale);
+                canvas.setDimensions({ width: originalW, height: originalH });
+                
+                const imageData = canvas.toDataURL({ format: 'png', quality: 1 });
+                
+                // Restore zoom
+                canvas.setZoom(oldZoom);
+                canvas.viewportTransform = vpt;
+                canvas.setDimensions({ width: bgImg.width * baseScale, height: bgImg.height * baseScale });
+
+                const payload = {
+                    canvas_state: JSON.stringify(canvas.toJSON()),
+                    page_number: remarksList[currentIndex].page_number,
+                    image_data: imageData
+                };
+
+                const res = await fetch(`/api/file/${FILE_ID}/save-canvas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    showToast("Report saved successfully.");
+                    isDirty = false;
+                } else {
+                    const err = await res.json();
+                    showError(err.message || "Failed to save report.");
+                }
+            } catch (err) {
+                showError("Save failed: " + err.message);
+            } finally {
+                isSaving = false;
+                btn.innerHTML = original;
+            }
+        }
+
+        // Step 8: Multi-Stage PDF Export (Fixed v16 Zero Margins)
+        async function downloadPDF(mode) {
+            document.getElementById('download-menu').classList.add('hidden');
+            
+            if (mode === 'single') {
+                showToast("Generating PDF...", "info");
+                const { jsPDF } = window.jspdf;
+                
+                const bgImg = canvas.getObjects('image').find(o => o.isBackground);
+                if (!bgImg) return showError("Report not loaded.");
+
+                const imgW = bgImg.width;
+                const imgH = bgImg.height;
+                const orientation = imgW > imgH ? 'l' : 'p';
+                
+                // Pixel-perfect constructor with scaling hotfix
+                const pdf = new jsPDF({
+                    orientation: orientation,
+                    unit: 'px',
+                    format: [imgW, imgH],
+                    hotfixes: ['px_scaling']
+                });
+                
+                // High-res capture (Strict alignment fix)
+                const oldZoom = canvas.getZoom();
+                const oldVpt = [...canvas.viewportTransform];
+                const oldW = canvas.width;
+                const oldH = canvas.height;
+
+                // Temporarily scale to 1:1 original resolution
+                canvas.setDimensions({ width: imgW, height: imgH });
+                canvas.setZoom(1 / baseScale);
+                canvas.viewportTransform = [1 / baseScale, 0, 0, 1 / baseScale, 0, 0];
+                canvas.calcOffset();
+
+                const data = canvas.toDataURL({ format: 'png', quality: 1.0 });
+                
+                // Restore previous view state
+                canvas.setDimensions({ width: oldW, height: oldH });
+                canvas.setZoom(oldZoom);
+                canvas.viewportTransform = oldVpt;
+                canvas.calcOffset();
+
+                // Add image at exact (0,0) with no scaling requested from PDF (already sized)
+                pdf.addImage(data, 'PNG', 0, 0, imgW, imgH, undefined, 'FAST');
+                pdf.save(`Report_Page_${remarksList[currentIndex].page_number}.pdf`);
+            }
+        }
+
+        // Tooling Logic
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`tool-${tool}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            
+            canvas.isDrawingMode = false;
+            canvas.selection = (tool === 'select');
+            canvas.defaultCursor = (tool === 'select') ? 'default' : 'crosshair';
+        }
+
+        function initGlobalListeners() {
+            canvas.on('mouse:down', function(opt) {
+                if (currentTool === 'select' || opt.target) return;
+                const pointer = canvas.getPointer(opt.e);
+                
+                if (currentTool === 'text') {
+                    const t = new fabric.IText('Add remarks...', {
+                        left: pointer.x, top: pointer.y,
+                        fontSize: parseInt(document.getElementById('font-size').value),
+                        fontFamily: 'Inter',
+                        fill: '#000000',
+                        cornerColor: '#6366f1',
+                        cornerSize: 8,
+                        transparentCorners: false
+                    });
+                    canvas.add(t).setActiveObject(t);
+                    setTool('select');
+                } else if (currentTool.startsWith('tick-')) {
+                    const color = currentTool.endsWith('green') ? '#059669' : '#000000';
+                    const tick = new fabric.Text('✔', {
+                        left: pointer.x, top: pointer.y,
+                        fontSize: 60,
+                        fill: color,
+                        fontWeight: 'bold'
+                    });
+                    canvas.add(tick).setActiveObject(tick);
+                    setTool('select');
+                }
+            });
+
+            canvas.on('object:added', () => isDirty = true);
+            canvas.on('object:modified', () => isDirty = true);
+            canvas.on('selection:created', () => document.getElementById('context-toolbar').classList.remove('hidden'));
+            canvas.on('selection:cleared', () => document.getElementById('context-toolbar').classList.add('hidden'));
+            
+            // Step 5: Mouse Wheel Zoom
+            canvas.on('mouse:wheel', function(opt) {
+                var delta = opt.e.deltaY;
+                if (delta > 0) zoomOut(); else zoomIn();
+                opt.e.preventDefault();
+                opt.e.stopPropagation();
+            });
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+            });
+            
+            // Leave protection
+            window.addEventListener('beforeunload', (e) => {
+                if (isDirty) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+        }
+
+        function deleteSelected() {
+            canvas.getActiveObjects().forEach(o => { if (!o.isBackground) canvas.remove(o); });
+            canvas.discardActiveObject().renderAll();
+        }
+
+        function updateSelectedText() {
+            const size = parseInt(document.getElementById('font-size').value);
+            canvas.getActiveObjects().forEach(o => { if (o.type === 'i-text' || o.type === 'text') o.set('fontSize', size); });
+            canvas.renderAll();
+        }
+
+        // Premium Signature Logic (v15)
+        let sigType = 'draw';
+        let sigFont = 'Dancing Script';
+        let sigInk = '#000000';
+        let uploadedSigUrl = null;
+
+        function openSignatureModal() {
+            document.getElementById('sig-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            
+            if (!sigPad) {
+                const c = document.getElementById('sig-pad');
+                // High-res initialization
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                c.width = c.offsetWidth * ratio;
+                c.height = c.offsetHeight * ratio;
+                c.getContext("2d").scale(ratio, ratio);
+
+                sigPad = new SignaturePad(c, {
+                    penColor: sigInk,
+                    minWidth: 1.5,
+                    maxWidth: 4.5
+                });
+                
+                // Real-time Preview Fix (v16 compatible events)
+                sigPad.addEventListener("beginStroke", () => {
+                    document.getElementById('sig-draw-guide').classList.add('hidden');
+                });
+                sigPad.addEventListener("endStroke", () => {
+                    updateSigPreview();
+                });
+            } else {
+                resizeSigCanvas();
+            }
+        }
+
+        function resizeSigCanvas() {
+            if (!sigPad) return;
+            const c = document.getElementById('sig-pad');
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            if (c.width !== c.offsetWidth * ratio) {
+                const data = sigPad.toData();
+                c.width = c.offsetWidth * ratio;
+                c.height = c.offsetHeight * ratio;
+                c.getContext("2d").scale(ratio, ratio);
+                sigPad.clear();
+                sigPad.fromData(data);
+            }
+        }
+
+        function closeSignatureModal() {
+            document.getElementById('sig-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function clearSig() { 
+            sigPad.clear(); 
+            document.getElementById('sig-draw-guide').classList.remove('hidden');
+            updateSigPreview(); 
+        }
+
+        function switchSigTab(tab) {
+            sigType = tab;
+            document.querySelectorAll('.sig-tab').forEach(b => b.classList.toggle('active', b.id === `sig-tab-${tab}`));
+            ['draw', 'type', 'upload'].forEach(p => document.getElementById(`sig-panel-${p}`).classList.toggle('hidden', p !== tab));
+            updateSigPreview();
+        }
+
+        function setSigInk(color) {
+            sigInk = color;
+            sigPad.penColor = color;
+            document.querySelectorAll('[id^="ink-"]').forEach(b => b.classList.remove('active-ink', 'ring-2', 'ring-indigo-500'));
+            const btn = document.getElementById(`ink-${color === '#000000' ? 'black' : 'indigo'}`);
+            btn.classList.add('active-ink', 'ring-2', 'ring-indigo-500');
+            updateSigPreview(); 
+        }
+
+        function setSigFont(font) {
+            sigFont = font;
+            document.querySelectorAll('[id^="font-"]').forEach(b => b.classList.remove('active-font', 'ring-2', 'ring-indigo-500', 'border-indigo-200'));
+            const fontId = font.toLowerCase().split(' ')[0];
+            document.getElementById(`font-${fontId}`).classList.add('active-font', 'ring-2', 'ring-indigo-500', 'border-indigo-200');
+            updateSigPreview();
+        }
+
+        async function handleSigUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const loader = document.getElementById('sig-upload-loading');
+            loader.classList.remove('hidden'); loader.classList.add('flex');
+
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+
+            try {
+                const res = await fetch('/api/reports/remove-background', { method: 'POST', body: formData });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    uploadedSigUrl = URL.createObjectURL(blob);
+                    updateSigPreview();
+                } else {
+                    const err = await res.json();
+                    showError(err.message || "Quality too low. Use light background.");
+                }
+            } catch (e) {
+                showError("Neural engine unavailable.");
+            } finally {
+                loader.classList.add('hidden'); loader.classList.remove('flex');
+            }
+        }
+
+        function updateSigPreview() {
+            const preview = document.getElementById('sig-preview');
+            preview.innerHTML = '';
+            let data = null;
+
+            if (sigType === 'draw' && sigPad && !sigPad.isEmpty()) {
+                data = sigPad.toDataURL("image/png");
+            } else if (sigType === 'type') {
+                const text = document.getElementById('sig-type-input').value.trim();
+                if (text) data = createTextSignature(text);
+            } else if (sigType === 'upload' && uploadedSigUrl) {
+                data = uploadedSigUrl;
+            }
+
+            if (data) {
+                const img = document.createElement('img');
+                img.src = data;
+                img.className = "max-w-full max-h-64 object-contain animate-in zoom-in-95 duration-300 drop-shadow-2xl";
+                preview.appendChild(img);
+            } else {
+                preview.innerHTML = `
+                    <div class="opacity-10 text-center space-y-4">
+                        <i class="fas fa-stamp text-7xl"></i>
+                        <p class="text-xs font-black uppercase tracking-[1em]">ID Pending</p>
+                    </div>
+                `;
+            }
+        }
+
+        function createTextSignature(text) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 800; tempCanvas.height = 300;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.clearRect(0,0,800,300);
+            ctx.font = `italic 110px "${sigFont}"`;
+            ctx.fillStyle = sigInk;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = "rgba(0,0,0,0.1)";
+            ctx.shadowBlur = 10;
+            ctx.fillText(text, 400, 150);
+            return tempCanvas.toDataURL();
+        }
+
+        function applySignature() {
+            const previewImg = document.getElementById('sig-preview').querySelector('img');
+            if (!previewImg) return showError("Verification required. Please provide your signature.");
+
+            fabric.Image.fromURL(previewImg.src, function(img) {
+                const bgImg = canvas.getObjects('image').find(o => o.isBackground);
+                if (bgImg) {
+                    const targetW = bgImg.width * 0.25;
+                    img.scale(targetW / img.width);
+                } else {
+                    img.scale(0.6);
+                }
+                
+                canvas.add(img).centerObject(img).setActiveObject(img).renderAll();
+                closeSignatureModal();
+                setTool('select');
+                showToast("Signature Authenticated & Placed");
+            });
+        }
+
+        // UI Helpers
+        function toggleDownloadMenu() { document.getElementById('download-menu').classList.toggle('hidden'); }
+        function showSpinner(show) { document.getElementById('loader').classList.toggle('hidden', !show); }
+        function showError(msg) { alert(msg); }
+        function showToast(msg) { 
+            const t = document.createElement('div');
+            t.className = "fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-gray-900 text-white text-xs font-bold rounded-2xl shadow-2xl z-[500] animate-in slide-in-from-bottom-5";
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+        function handleBack() {
+             if (isDirty && !confirm("Unsaved changes! Exit anyway?")) return;
+             window.location.href = `/file/${FILE_ID}`;
+        }
+
+        // Multi-Download Stub
+        function openMultiDownload() {
+            const list = document.getElementById('multi-dl-list');
+            list.innerHTML = remarksList.map(p => `
+                <div class="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-3xl transition-colors">
+                    <input type="checkbox" checked class="w-5 h-5 accent-indigo-600 report-checkbox" data-num="${p.page_number}">
+                    <span class="text-xs font-bold text-gray-700">Page ${p.page_number}</span>
+                </div>
+            `).join('');
+            document.getElementById('multi-dl-modal').classList.remove('hidden');
+        }
+        function closeMultiDownload() { document.getElementById('multi-dl-modal').classList.add('hidden'); }
+        function selectAllRemarks(val) { document.querySelectorAll('.report-checkbox').forEach(c => c.checked = val); }
+        async function generateCombinedPDF() {
+            showToast("Generating Bundle...", "info");
+            const nums = [...document.querySelectorAll('.report-checkbox:checked')].map(c => parseInt(c.dataset.num));
+            const { jsPDF } = window.jspdf;
+            let pdf = null;
+
+            for (let num of nums) {
+                const res = await fetch(`/image/${FILE_ID}/${num}`);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const img = await new Promise(r => fabric.Image.fromURL(url, r));
+                
+                if (!pdf) {
+                   pdf = new jsPDF(img.width > img.height ? 'l' : 'p', 'px', [img.width, img.height]);
+                } else {
+                   pdf.addPage([img.width, img.height], img.width > img.height ? 'l' : 'p');
+                }
+                
+                // Here we would ideally load the edited state and render it, 
+                // but since /image/ already serves edited PNGs, we can just use the image directly!
+                const canvasData = await new Promise(async (resolve) => {
+                    const tempCanvas = document.createElement('canvas');
+                    const ctx = tempCanvas.getContext('2d');
+                    const i = new Image();
+                    i.onload = () => {
+                        tempCanvas.width = i.width;
+                        tempCanvas.height = i.height;
+                        ctx.drawImage(i, 0, 0);
+                        resolve(tempCanvas.toDataURL('image/png'));
+                    };
+                    i.src = url;
+                });
+                
+                pdf.addImage(canvasData, 'PNG', 0, 0, img.width, img.height);
+            }
+            pdf.save(`Combined_Reports_{{ file.file_name }}.pdf`);
+            closeMultiDownload();
+        }
+    </script>
+</body>
+</html>

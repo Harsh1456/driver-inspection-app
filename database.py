@@ -131,6 +131,7 @@ class InspectionEdit(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     file_id = db.Column(db.String(36), db.ForeignKey('uploaded_files.file_id'), nullable=False)
+    page_number = db.Column(db.Integer, default=1)  # Link edit to specific page (v8 Fix)
     signature_data = db.Column(db.Text)  # Base64 encoded signature image
     signature_type = db.Column(db.String(20))  # drawn, uploaded, typed
     signer_name = db.Column(db.String(255))
@@ -138,6 +139,7 @@ class InspectionEdit(db.Model):
     signature_date = db.Column(db.String(50))  # Date of authorization
     edited_remarks = db.Column(db.Text)
     original_remarks = db.Column(db.Text)
+    canvas_state = db.Column(db.Text)  # Stores Fabric.js canvas JSON state
     edited_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -150,6 +152,7 @@ class InspectionEdit(db.Model):
             'signature_date': self.signature_date,
             'edited_remarks': self.edited_remarks,
             'original_remarks': self.original_remarks,
+            'canvas_state': self.canvas_state,
             'edited_at': self.edited_at.isoformat(),
             'has_signature': bool(self.signature_data),
             'signature_preview': self.get_signature_preview()
