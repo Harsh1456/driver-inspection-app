@@ -79,16 +79,35 @@ class Dashboard {
         document.getElementById('pages-remarks').textContent = stats.pages_with_remarks.toLocaleString();
     }
     
+    validateDateFormat() {
+        if (!this.searchDate) return true;
+        
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(this.searchDate)) {
+            this.showNotification('Please use YYYY-MM-DD date format', 'error');
+            return false;
+        }
+        return true;
+    }
+
     async loadFiles() {
+        if (!this.validateDateFormat()) {
+            return;
+        }
+
         this.showLoading();
         
         try {
             const params = new URLSearchParams({
                 page: this.currentPage,
                 per_page: this.perPage,
-                search: this.searchTerm,
-                date: this.searchDate
+                search: this.searchTerm
             });
+            
+            // Add date filter if set
+            if (this.searchDate) {
+                params.append('date', this.searchDate);
+            }
             
             const response = await fetch(`/api/files?${params}`);
             const data = await response.json();
@@ -310,5 +329,8 @@ class Dashboard {
 
 // Initialize dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    if (!document.getElementById('files-tbody') || !document.getElementById('pagination-controls')) {
+        return;
+    }
     window.dashboard = new Dashboard();
 });
