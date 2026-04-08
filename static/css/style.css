@@ -313,3 +313,19 @@ body::before {
     pointer-events: none;
     z-index: -1;
 }
+
+/* Remove default date input icon in some browsers */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+    filter: invert(0.5);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+/* Style for the filter badges */
+#filter-indicator .hidden {
+    display: none;
+}
