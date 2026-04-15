@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_file, url_for
+from flask import Flask, request, jsonify, render_template, send_file, url_for, redirect, flash
 import os
 import uuid
 import json
@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 
 # Import modules
 from config import Config
-from database import db, UploadedFile, ReportPage
+from database import db, UploadedFile, ReportPage, User
 from uploader import FileUploader
 from classifier import RemarkClassifier
 from extractor import TextExtractor
@@ -17,6 +17,9 @@ from database import db, UploadedFile, ReportPage, VehicleInspection, Inspection
 import io
 import base64
 from PIL import Image
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from authlib.integrations.flask_client import OAuth
+import requests
 
 try:
     from rembg import new_session, remove
@@ -30,7 +33,44 @@ app.config.from_object(Config)
 
 # Initialize components
 db.init_app(app)
+
+# Auto-Migration: Ensure password_hash exists (Hotfix for UndefinedColumn error)
+with app.app_context():
+    from sqlalchemy import text
+    try:
+        # Using IF NOT EXISTS (PostgreSQL) or catching the error to ensure safety
+        db.session.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)"))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        # Fallback for systems that don't support IF NOT EXISTS or other issues
+        try:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"))
+            db.session.commit()
+        except:
+            db.session.rollback()
+
 file_uploader = FileUploader(app.config['UPLOAD_FOLDER'], app.config['ALLOWED_EXTENSIONS'])
+
+# Initialize Auth components
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+oauth = OAuth(app)
+microsoft = oauth.register(
+    name='microsoft',
+    client_id=app.config['MICROSOFT_CLIENT_ID'],
+    client_secret=app.config['MICROSOFT_CLIENT_SECRET'],
+    server_metadata_url=app.config['MICROSOFT_DISCOVERY_URL'],
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
 
 # Initialize AI components
 classifier = None
@@ -79,15 +119,141 @@ app.register_blueprint(dashboard_bp)
 
 @app.route('/')
 def home():
-    """Redirect to dashboard"""
+    """Home page, accessible to everyone"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
     return render_template('index.html')
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        remember = True if request.form.get('remember') else False
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user or not user.check_password(password):
+            flash('Please check your login details and try again.', 'danger')
+            return redirect(url_for('login'))
+            
+        login_user(user, remember=remember)
+        return redirect(url_for('dashboard.dashboard'))
+        
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Registration page"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
+        
+    if request.method == 'POST':
+        email = request.form.get('email')
+        name = request.form.get('name')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            flash('Email address already exists.', 'danger')
+            return redirect(url_for('register'))
+            
+        new_user = User(email=email, name=name)
+        new_user.set_password(password)
+        
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
+        
+    return render_template('register.html')
+
+@app.route('/login/microsoft')
+def login_microsoft():
+    """Initiate Microsoft OAuth flow"""
+    redirect_uri = url_for('authorize_microsoft', _external=True)
+    return microsoft.authorize_redirect(redirect_uri)
+
+@app.route('/login/microsoft/callback')
+def authorize_microsoft():
+    """Handle Microsoft OAuth callback"""
+    token = microsoft.authorize_access_token()
+    user_info = token.get('userinfo')
+    
+    if not user_info:
+        return "Failed to fetch user info", 400
+        
+    microsoft_id = user_info.get('sub')
+    email = user_info.get('email') or user_info.get('preferred_username')
+    name = user_info.get('name')
+    picture = user_info.get('picture')
+    
+    # Find or create user
+    user = User.query.filter_by(microsoft_id=microsoft_id).first()
+    if not user:
+        # Check if user exists by email (to link previous Google accounts)
+        user = User.query.filter_by(email=email).first()
+        if user:
+            user.microsoft_id = microsoft_id
+            if picture:
+                user.profile_pic = picture
+            db.session.commit()
+        else:
+            user = User(
+                microsoft_id=microsoft_id,
+                email=email,
+                name=name,
+                profile_pic=picture
+            )
+            db.session.add(user)
+            db.session.commit()
+    else:
+        # Update profile pic if it changed
+        if picture and user.profile_pic != picture:
+            user.profile_pic = picture
+            user.name = name
+            db.session.commit()
+            
+    # Log user in
+    login_user(user)
+    
+    return redirect(url_for('dashboard.dashboard'))
+
+@app.route('/run-migration')
+def run_migration():
+    """Temporary route to run DB migrations"""
+    from sqlalchemy import text
+    try:
+        # Check if column exists
+        sql = text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)")
+        db.session.execute(sql)
+        db.session.commit()
+        return "Migration successful: password_hash column added."
+    except Exception as e:
+        db.session.rollback()
+        return f"Migration failed: {str(e)}"
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Log user out and redirect to home"""
+    logout_user()
+    return redirect(url_for('home'))
+
 @app.route('/upload')
+@login_required
 def upload_page():
     """File upload interface"""
     return render_template('upload.html')
 
 @app.route('/api/upload', methods=['POST'])
+@login_required
 def upload_file():
     """API endpoint for file upload and processing"""
     try:
@@ -309,6 +475,7 @@ def process_uploaded_file(file_info):
         }
 
 @app.route('/image/<file_id>/<int:page_number>')
+@login_required
 def serve_image(file_id, page_number):
     """Serve images, prioritizing edited versions if they exist (v8 Fix)"""
     try:
@@ -334,6 +501,7 @@ def serve_image(file_id, page_number):
         return "Image not found", 404
 
 @app.route('/api/file/<file_id>/delete', methods=['DELETE'])
+@login_required
 def delete_file(file_id):
     """Delete a file and all its associated images"""
     try:
@@ -374,6 +542,7 @@ def delete_file(file_id):
         }), 500
 
 @app.route('/api/page/<page_id>/update-text', methods=['POST'])
+@login_required
 def update_page_text(page_id):
     """Update extracted text for a page"""
     try:
@@ -396,6 +565,7 @@ def update_page_text(page_id):
         }), 500
 
 @app.route('/api/export/excel', methods=['POST'])
+@login_required
 def export_excel():
     """Export inspection data to Excel with signature"""
     try:
@@ -600,6 +770,7 @@ def export_excel():
             'error': str(e)
         }), 500
 @app.route('/api/reports/remove-background', methods=['POST'])
+@login_required
 def remove_signature_background():
     """Remove background from an uploaded signature image and return a transparent PNG."""
     try:
@@ -667,6 +838,7 @@ def remove_signature_background():
         }), 500
 
 @app.route('/report-editor/<file_id>')
+@login_required
 def report_editor(file_id):
     """Serve the standalone Report Editor page"""
     file = UploadedFile.query.get_or_404(file_id)
@@ -689,6 +861,7 @@ def report_editor(file_id):
                           initial_page=request.args.get('page', 1, type=int))
                           
 @app.route('/api/file/<file_id>/save-canvas', methods=['POST'])
+@login_required
 def save_canvas_state(file_id):
     """Save the Fabric.js canvas state and flattened image for a report page"""
     try:
@@ -717,26 +890,27 @@ def save_canvas_state(file_id):
             print(f"Database error in save_canvas_state: {str(db_err)}")
             return jsonify({'success': False, 'message': f'Database error: {str(db_err)}'}), 500
         
-        # 2. Save Flattened Image to Disk if provided (v8 Fix)
+        # 2. Save Flattened Image to Disk if provided (Optimized Memory Handling)
         if image_data and ',' in image_data:
             try:
                 # Ensure directory exists
                 edited_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'edited')
                 os.makedirs(edited_dir, exist_ok=True)
                 
-                # Decode and save
-                header, encoded = image_data.split(',', 1)
+                # Use a larger chunk size/more efficient decoding if possible
+                # But for now, just ensure we're not holding multiple copies
+                _, encoded = image_data.split(',', 1)
                 img_bytes = base64.b64decode(encoded)
+                del image_data # Explicitly free memory hint
                 
                 filename = f"{file_id}_{page_number}.png"
                 save_path = os.path.join(edited_dir, filename)
                 
                 with open(save_path, 'wb') as f:
                     f.write(img_bytes)
+                del img_bytes # Explicitly free memory hint
             except Exception as img_err:
                 print(f"Error saving edited image to disk: {str(img_err)}")
-                # We don't return 500 here yet, as the database update might still be valuable
-                # But for diagnostics, we want to know if it fails.
 
         db.session.commit()
         return jsonify({'success': True, 'message': 'Report edits saved successfully'})
@@ -748,6 +922,7 @@ def save_canvas_state(file_id):
         return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
 
 @app.route('/api/file/<file_id>/load-canvas', methods=['GET'])
+@login_required
 def load_canvas_state(file_id):
     """Load the Fabric.js canvas state for a specific page"""
     try:
