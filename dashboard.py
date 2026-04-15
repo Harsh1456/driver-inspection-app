@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, jsonify, send_file
+from flask import Blueprint, render_template, request, jsonify, send_file, redirect, url_for
+from flask_login import login_required, current_user
 from database import db, UploadedFile, ReportPage
 import os
 import json
@@ -8,10 +9,13 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 @dashboard_bp.route('/')
 def index():
-    """Home page"""
-    return render_template('index.html')
+    """Home page redirect"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
+    return redirect(url_for('login'))
 
 @dashboard_bp.route('/dashboard')
+@login_required
 def dashboard():
     """Main dashboard showing all uploaded files"""
     # Get pagination parameters
@@ -33,6 +37,7 @@ def dashboard():
     return render_template('dashboard.html', files=files, search=search)
 
 @dashboard_bp.route('/api/files')
+@login_required
 def get_files_api():
     """API endpoint to get uploaded files data with filtering"""
     # Get filter parameters
@@ -75,6 +80,7 @@ def get_files_api():
     })
 
 @dashboard_bp.route('/file/<file_id>')
+@login_required
 def file_detail(file_id):
     """Detailed view of a specific file"""
     file = UploadedFile.query.get_or_404(file_id)
@@ -83,6 +89,7 @@ def file_detail(file_id):
     return render_template('file_detail.html', file=file, pages=pages)
 
 @dashboard_bp.route('/api/file/<file_id>')
+@login_required
 def file_detail_api(file_id):
     """API endpoint for file details"""
     file = UploadedFile.query.get_or_404(file_id)
@@ -111,6 +118,7 @@ def file_detail_api(file_id):
     })
 
 @dashboard_bp.route('/api/file/<file_id>/delete', methods=['DELETE'])
+@login_required
 def delete_file(file_id):
     """Delete a file and all its pages"""
     try:
@@ -138,6 +146,7 @@ def delete_file(file_id):
         }), 500
 
 @dashboard_bp.route('/api/page/<page_id>/update-text', methods=['POST'])
+@login_required
 def update_page_text(page_id):
     """Update extracted text for a page"""
     try:
@@ -160,6 +169,7 @@ def update_page_text(page_id):
         }), 500
 
 @dashboard_bp.route('/api/stats')
+@login_required
 def get_stats():
     """Get dashboard statistics"""
     total_files = UploadedFile.query.count()
