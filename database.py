@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
@@ -175,9 +176,42 @@ class InspectionEdit(db.Model):
             return self.edited_at.strftime('%Y-%m-%d')
         return "N/A"
 
+from flask_login import UserMixin
+
+class User(db.Model, UserMixin):
+    """Model for storing user information from Google OAuth"""
+    
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    google_id = db.Column(db.String(100), unique=True, nullable=True)
+    microsoft_id = db.Column(db.String(100), unique=True, nullable=True)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)
+    profile_pic = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+        
+    def check_password(self, password):
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, password)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'name': self.name,
+            'profile_pic': self.profile_pic,
+            'created_at': self.created_at.isoformat()
+        }
 
 # Create composite indexes for better query performance
 db.Index('idx_file_pages', ReportPage.file_id, ReportPage.page_number)
 db.Index('idx_upload_timestamp', UploadedFile.upload_timestamp)
 db.Index('idx_edits_file', InspectionEdit.file_id, InspectionEdit.edited_at.desc())
 db.Index('idx_inspection_file', VehicleInspection.file_id)
+db.Index('idx_user_email', User.email)
