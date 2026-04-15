@@ -13,3 +13,6 @@ gunicorn
 openpyxl
 rembg
 onnxruntime
+authlib
+flask-login
+requests
