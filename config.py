@@ -29,3 +29,14 @@ class Config:
     
     # Production settings
     PREFERRED_URL_SCHEME = 'https'
+
+    # Google OAuth settings (Deprecated)
+    GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+    GOOGLE_DISCOVERY_URL = os.environ.get('GOOGLE_DISCOVERY_URL')
+
+    # Microsoft OAuth settings
+    MICROSOFT_CLIENT_ID = os.environ.get('MICROSOFT_CLIENT_ID')
+    MICROSOFT_CLIENT_SECRET = os.environ.get('MICROSOFT_CLIENT_SECRET')
+    MICROSOFT_TENANT_ID = os.environ.get('MICROSOFT_TENANT_ID') or 'common'
+    MICROSOFT_DISCOVERY_URL = f"https://login.microsoftonline.com/{MICROSOFT_TENANT_ID}/v2.0/.well-known/openid-configuration"
