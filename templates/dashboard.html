@@ -1,111 +1,203 @@
 {% extends "base.html" %}
+{% block title %}Dashboard — InspectAI{% endblock %}
 
-{% block title %}Dashboard - Inspection Processor{% endblock %}
+{% block extra_css %}
+<style>
+/* Criticality ring on stat card */
+.stat-card-interactive {
+  cursor: default;
+  transition: var(--transition);
+}
+.stat-card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
 
-{% block content %}
-<div class="mb-8">
-    <h1 class="text-3xl font-bold text-gray-800 mb-2">Reports Dashboard</h1>
-    <p class="text-gray-600">Monitor all processed inspection reports</p>
-</div>
+/* Table file name link */
+.file-link {
+  font-family: 'Sora', sans-serif;
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: var(--text-sm);
+  transition: var(--transition);
+}
+.file-link:hover { color: var(--primary); }
 
-<!-- Stats Overview -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <div class="card-modern rounded-2xl p-6 transition-all duration-300">
-        <div class="flex justify-between items-start">
-            <div>
-                <p class="text-gray-500 text-sm font-medium uppercase tracking-wide">Total Files</p>
-                <h3 class="text-3xl font-bold text-gray-800 mt-2" id="total-files">0</h3>
-            </div>
-            <div class="bg-blue-100 p-4 rounded-xl">
-                <i class="fas fa-file text-blue-600 text-2xl"></i>
-            </div>
-        </div>
-    </div>
-    
-    <div class="card-modern rounded-2xl p-6 transition-all duration-300">
-        <div class="flex justify-between items-start">
-            <div>
-                <p class="text-gray-500 text-sm font-medium uppercase tracking-wide">Total Pages</p>
-                <h3 class="text-3xl font-bold text-gray-800 mt-2" id="total-pages">0</h3>
-            </div>
-            <div class="bg-primary-100 p-4 rounded-xl">
-                <i class="fas fa-copy text-primary-600 text-2xl"></i>
-            </div>
-        </div>
-    </div>
-    
-    <div class="card-modern rounded-2xl p-6 transition-all duration-300">
-        <div class="flex justify-between items-start">
-            <div>
-                <p class="text-gray-500 text-sm font-medium uppercase tracking-wide">Pages with Remarks</p>
-                <h3 class="text-3xl font-bold text-gray-800 mt-2" id="pages-remarks">0</h3>
-            </div>
-            <div class="bg-orange-100 p-4 rounded-xl">
-                <i class="fas fa-edit text-orange-600 text-2xl"></i>
-            </div>
-        </div>
-    </div>
-</div>
+/* Filter/search row */
+.table-toolbar {
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
 
-<!-- Files Table -->
-<div class="table-modern rounded-2xl overflow-hidden">
-    <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-        <div class="flex justify-between items-center">
-            <h2 class="text-lg font-semibold text-gray-800">Processed Files</h2>
-            <div class="flex space-x-3 items-center">
-                <div class="flex space-x-3">
-                    <div class="relative">
-                        <input type="text" id="search-input" placeholder="Search files..." 
-                               class="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-600 focus:border-transparent w-48 bg-white">
-                        <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
-                    </div>
-                    <div class="relative">
-                        <input type="date" id="date-filter" 
-                               class="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-600 focus:border-transparent bg-white">
-                    </div>
-                </div>
-                <a href="{{ url_for('upload_page') }}" class="btn-modern px-5 py-2.5 rounded-xl font-medium flex items-center">
-                    <i class="fas fa-plus mr-2"></i> Upload New
-                </a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="overflow-x-auto">
-        <table class="w-full">
-            <thead class="bg-gray-50 text-gray-600 text-left">
-                <tr>
-                    <th class="py-4 px-6 font-medium text-sm uppercase tracking-wide border-b border-gray-200">File Name</th>
-                    <th class="py-4 px-6 font-medium text-sm uppercase tracking-wide border-b border-gray-200">Type</th>
-                    <th class="py-4 px-6 font-medium text-sm uppercase tracking-wide border-b border-gray-200">Upload Date</th>
-                    <th class="py-4 px-6 font-medium text-sm uppercase tracking-wide border-b border-gray-200">Pages</th>
-                    <th class="py-4 px-6 font-medium text-sm uppercase tracking-wide border-b border-gray-200">Remarks</th>
-                    <th class="py-4 px-6 font-medium text-sm uppercase tracking-wide border-b border-gray-200">Criticality</th>
-                    <th class="py-4 px-6 font-medium text-sm uppercase tracking-wide border-b border-gray-200 text-right">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="files-tbody" class="divide-y divide-gray-100">
-                <!-- Files will be loaded here dynamically -->
-            </tbody>
-        </table>
-    </div>
-    
-    <div class="px-6 py-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-        <div class="flex justify-between items-center">
-            <p class="text-gray-600 text-sm" id="files-count">Loading files...</p>
-            <div class="flex space-x-2" id="pagination-controls">
-                <!-- Pagination will be inserted here -->
-            </div>
-        </div>
-    </div>
-</div>
+/* Input with icon wrapper */
+.input-icon-wrap {
+  position: relative;
+}
+.input-icon-wrap .icon {
+  position: absolute;
+  left: var(--sp-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  font-size: 0.875rem;
+  pointer-events: none;
+}
+.input-icon-wrap .input {
+  padding-left: 2.5rem;
+}
 
-<!-- Loading Spinner -->
-<div id="loading-spinner" class="flex justify-center items-center py-12">
-    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-</div>
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: var(--text-faint);
+}
+.empty-state-icon {
+  width: 80px;
+  height: 80px;
+  background: var(--surface-alt);
+  border-radius: var(--r-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: var(--text-faint);
+  margin: 0 auto var(--sp-4);
+}
+
+/* Skeleton rows */
+.skeleton-row td {
+  padding: var(--sp-4) var(--sp-5);
+}
+</style>
 {% endblock %}
 
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% block content %}
+<div class="animate-fade">
+
+  <!-- Page header -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-header-title">System Overview</h1>
+      <p class="page-header-sub">Real-time status of all processed inspection reports.</p>
+    </div>
+    <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i>
+      Upload New Report
+    </a>
+  </div>
+
+  <!-- ── KPI Stats ── -->
+  <div class="grid grid-3 mb-8">
+
+    <div class="card stat-card stat-card-interactive">
+      <div class="stat-icon-wrap" style="background:var(--green-100);">
+        <i class="fas fa-folder-open" style="color:var(--primary); font-size:1.25rem;"></i>
+      </div>
+      <div>
+        <div class="stat-label">Total Reports</div>
+        <div class="stat-value" id="total-files">—</div>
+      </div>
+    </div>
+
+    <div class="card stat-card stat-card-interactive">
+      <div class="stat-icon-wrap" style="background:var(--info-light);">
+        <i class="fas fa-file-lines" style="color:var(--info); font-size:1.25rem;"></i>
+      </div>
+      <div>
+        <div class="stat-label">Pages Analyzed</div>
+        <div class="stat-value" id="total-pages">—</div>
+      </div>
+    </div>
+
+    <div class="card stat-card stat-card-interactive">
+      <div class="stat-icon-wrap" style="background:var(--warning-light);">
+        <i class="fas fa-triangle-exclamation" style="color:var(--warning); font-size:1.25rem;"></i>
+      </div>
+      <div>
+        <div class="stat-label">Flagged Pages</div>
+        <div class="stat-value" id="pages-remarks">—</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Main Table Card ── -->
+  <div class="card" style="padding:0; overflow:hidden; border-radius:var(--r-xl);">
+
+    <!-- Toolbar -->
+    <div class="table-toolbar">
+      <div>
+        <h2 style="font-size:var(--text-base); font-weight:700; margin:0;">Processed Reports</h2>
+        <p style="font-size:var(--text-xs); color:var(--text-faint); margin-top:2px;">All uploaded and analysed inspection files.</p>
+      </div>
+      <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap;">
+        <div class="input-icon-wrap">
+          <i class="fas fa-magnifying-glass icon"></i>
+          <input type="text" id="search-input" placeholder="Search by file name…"
+                 class="input" style="width:220px; font-size:var(--text-sm);" aria-label="Search files">
+        </div>
+        <div class="input-icon-wrap">
+          <i class="fas fa-calendar icon"></i>
+          <input type="date" id="date-filter" class="input"
+                 style="width:170px; font-size:var(--text-sm);" aria-label="Filter by date">
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrapper" style="border:none; border-radius:0;">
+      <table id="files-table" aria-label="Inspection reports list">
+        <thead>
+          <tr>
+            <th>File Name</th>
+            <th>Type</th>
+            <th>Uploaded On</th>
+            <th>Pages</th>
+            <th>Criticality</th>
+            <th style="text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="files-tbody">
+          <!-- skeleton rows -->
+          {% for _ in range(4) %}
+          <tr class="skeleton-row">
+            <td><div class="skeleton" style="height:18px; width:200px;"></div></td>
+            <td><div class="skeleton" style="height:18px; width:40px;"></div></td>
+            <td><div class="skeleton" style="height:18px; width:100px;"></div></td>
+            <td><div class="skeleton" style="height:18px; width:50px;"></div></td>
+            <td><div class="skeleton" style="height:18px; width:70px;"></div></td>
+            <td><div class="skeleton" style="height:18px; width:80px; margin-left:auto;"></div></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Table footer / pagination -->
+    <div style="padding:var(--sp-4) var(--sp-5); border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--sp-3);">
+      <p class="text-xs" id="files-count" style="color:var(--text-faint); font-weight:600;">
+        Loading…
+      </p>
+      <div id="pagination-controls" style="display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap;"></div>
+    </div>
+
+  </div><!-- /.card -->
+
+  <!-- Loading overlay (full-page spinner) -->
+  <div id="loading-spinner" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.7); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(2px);">
+    <div style="background:var(--white); padding:var(--sp-6); border-radius:var(--r-xl); box-shadow:var(--shadow-xl); display:flex; flex-direction:column; align-items:center; gap:var(--sp-3);">
+      <div style="width:48px; height:48px; border:3px solid var(--green-100); border-top-color:var(--primary); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+      <span style="font-size:var(--text-sm); font-weight:700; color:var(--primary);">Loading reports…</span>
+    </div>
+  </div>
+
+</div>
 {% endblock %}

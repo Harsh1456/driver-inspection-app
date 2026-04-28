@@ -1,789 +1,834 @@
 {% extends "base.html" %}
+{% block title %}{{ file.file_name }} — InspectAI{% endblock %}
 
-{% block title %}{{ file.file_name }} - Inspection Processor{% endblock %}
+{% block extra_css %}
+<style>
+@keyframes spin    { to { transform: rotate(360deg); } }
+@keyframes fadeIn  { from{opacity:0;} to{opacity:1;} }
+@keyframes zoomIn  { from{opacity:0;transform:scale(.92);} to{opacity:1;transform:scale(1);} }
+@keyframes bounceIn{ 0%{transform:scale(.5);opacity:0;} 70%{transform:scale(1.1);} 100%{transform:scale(1);opacity:1;} }
 
-{% block content %}
-<div class="mb-6">
-    <div class="flex justify-between items-start">
-        <div>
-            <a href="{{ url_for('dashboard.dashboard') }}"
-                class="text-green-600 hover:text-green-700 mb-4 inline-block">
-                <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">{{ file.file_name }}</h1>
-            <p class="text-gray-600">Uploaded on {{ file.upload_timestamp.strftime('%B %d, %Y at %I:%M %p') }}</p>
-        </div>
-        <div class="flex space-x-2">
-            <button id="edit-report-btn" onclick="openCanvasEditor()"
-                class="bg-indigo-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all flex items-center group relative {% if not file.pages_with_remarks %}hidden{% endif %}">
-                <i class="fas fa-edit mr-2"></i>Edit Report
-            </button>
-            <div class="relative group">
-                <button onclick="toggleDownloadOptions()"
-                    class="bg-gray-800 text-white px-4 py-3 rounded-xl font-medium hover:bg-gray-900 transition-all flex items-center">
-                    <i class="fas fa-download mr-2"></i>Download PDF
-                </button>
-                <div id="download-options-menu" class="hidden absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-3 z-[200]">
-                    <button onclick="generatePDF('single')" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors flex items-center">
-                        <i class="fas fa-file-alt mr-3 text-indigo-500"></i>Current Report
-                    </button>
-                    <button onclick="generatePDF('with_remarks')" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors flex items-center">
-                        <i class="fas fa-exclamation-circle mr-3 text-orange-500"></i>Reports with Remarks
-                    </button>
-                    <button onclick="generatePDF('without_remarks')" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors flex items-center">
-                        <i class="fas fa-check-circle mr-3 text-green-500"></i>Reports without Remarks
-                    </button>
-                    <div class="h-px bg-gray-100 my-1"></div>
-                    <button onclick="openMultiDownloadModal()" class="w-full text-left px-4 py-2.5 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors flex items-center">
-                        <i class="fas fa-tasks mr-3 text-blue-500"></i>Custom Selection...
-                    </button>
-                </div>
-            </div>
-            <button onclick="deleteFile('{{ file.file_id }}')"
-                class="bg-red-50 text-red-600 border border-red-100 px-4 py-3 rounded-xl font-medium hover:bg-red-100 transition-all flex items-center">
-                <i class="fas fa-trash mr-2"></i>Delete
-            </button>
-        </div>
-    </div>
-</div>
+/* ── Viewer grid ── */
+.viewer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 1fr);
+  gap: 0;
+  background: var(--white);
+  align-items: stretch;
+}
+@media(max-width:850px) {
+  .viewer-grid { grid-template-columns: minmax(0, 1fr); }
+  .remarks-panel { border-left: none !important; border-top: 1px solid var(--border); }
+}
 
-<!-- Rest of your existing file_detail.html content remains exactly the same -->
-<!-- File Summary -->
-<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-    <div id="filter-all" onclick="filterPages('all')"
-        class="bg-white rounded-lg p-4 shadow-sm border border-gray-200 text-center cursor-pointer hover:bg-gray-50 transition-all ring-2 ring-blue-500">
-        <p class="text-gray-500 text-sm">Total Pages</p>
-        <p class="text-2xl font-bold text-gray-800">{{ file.total_pages }}</p>
-    </div>
-    <div id="filter-with_remarks" onclick="filterPages('with_remarks')"
-        class="bg-white rounded-lg p-4 shadow-sm border border-gray-200 text-center cursor-pointer hover:bg-gray-50 transition-all">
-        <p class="text-gray-500 text-sm">With Remarks</p>
-        <p class="text-2xl font-bold text-orange-600">{{ file.pages_with_remarks }}</p>
-    </div>
-    <div id="filter-without_remarks" onclick="filterPages('without_remarks')"
-        class="bg-white rounded-lg p-4 shadow-sm border border-gray-200 text-center cursor-pointer hover:bg-gray-50 transition-all">
-        <p class="text-gray-500 text-sm">Without Remarks</p>
-        <p class="text-2xl font-bold text-green-600">{{ file.pages_without_remarks }}</p>
-    </div>
-    <div class="bg-white rounded-lg p-4 shadow-sm border border-gray-200 text-center">
-        <p class="text-gray-500 text-sm">Criticality</p>
-        <p
-            class="text-2xl font-bold {{ 'text-red-600' if file.criticality_level == 'RED' else 'text-orange-600' if file.criticality_level == 'ORANGE' else 'text-green-600' }}">
-            {{ file.criticality_level }}
-        </p>
-    </div>
-</div>
+/* ── Filmstrip ── */
+.filmstrip {
+  display: flex;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  padding: var(--sp-4) 0 var(--sp-2);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.filmstrip::-webkit-scrollbar { height: 4px; }
+.filmstrip::-webkit-scrollbar-track { background: transparent; }
+.filmstrip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-<!-- Main Gallery View -->
-<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-    <div class="px-6 py-4 border-b border-gray-200">
-        <h2 class="text-lg font-semibold text-gray-800">Document Viewer</h2>
-        <p class="text-sm text-gray-600">Page <span id="current-page">1</span> of <span id="total-pages-count">{{
-                pages|length }}</span></p>
-    </div>
+.thumb-wrap {
+  flex-shrink: 0;
+  width: 68px;
+  cursor: pointer;
+}
+.thumb-inner {
+  border: 2px solid transparent;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: var(--transition);
+  position: relative;
+}
+.thumb-inner img {
+  width: 100%;
+  height: 82px;
+  object-fit: cover;
+  opacity: 0.55;
+  transition: opacity .2s;
+  display: block;
+}
+.thumb-inner.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-ring);
+}
+.thumb-inner.active img { opacity: 1; }
+.thumb-inner:hover img  { opacity: 0.85; }
+.thumb-num {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-faint);
+  margin-top: var(--sp-1);
+}
+.thumb-inner.active + .thumb-num { color: var(--primary); }
 
-    <!-- Current Page View -->
-    <div class="p-6">
-        <div class="flex justify-between items-start mb-4">
-            <h3 class="text-lg font-medium text-gray-800" id="current-page-title">Page 1</h3>
-            <span id="current-page-status"
-                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
-                Has Remarks
-            </span>
-        </div>
+/* ── Image viewer ── */
+.image-stage {
+  position: relative;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  min-height: 360px;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+}
+.image-stage img {
+  max-width: 100%;
+  max-height: 400px;
+  width: auto;
+  height: auto;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  cursor: zoom-in;
+  object-fit: contain;
+  transition: opacity .2s;
+  display: block;
+}
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Page Image Section with Controls -->
-            <div class="space-y-4">
-                <h4 class="text-sm font-medium text-gray-700">Page Image</h4>
-                <div class="border border-gray-200 rounded-lg bg-gray-50">
-                    <!-- Main Image with Navigation Arrows -->
-                    <div class="relative p-4">
-                        <!-- Navigation Arrows -->
-                        <button id="prev-page"
-                            class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition disabled:opacity-30 disabled:cursor-not-allowed z-10">
-                            <i class="fas fa-chevron-left w-4 h-4"></i>
-                        </button>
+/* Nav arrow btns */
+.nav-arrow {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.9);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: var(--transition);
+  color: var(--text-main);
+  backdrop-filter: blur(6px);
+}
+.nav-arrow:hover { background: var(--primary); color: white; border-color: var(--primary); }
+.nav-arrow:disabled { opacity: .3; pointer-events: none; }
+#prev-page { left: var(--sp-4); }
+#next-page  { right: var(--sp-4); }
 
-                        <button id="next-page"
-                            class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition disabled:opacity-30 disabled:cursor-not-allowed z-10">
-                            <i class="fas fa-chevron-right w-4 h-4"></i>
-                        </button>
+/* ── Remarks panel ── */
+.remarks-panel {
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-5);
+  background: var(--white);
+  height: auto;
+  min-height: 400px;
+}
 
-                        <!-- Main Image -->
-                        <div class="flex justify-center">
-                            <img id="current-page-image"
-                                src="{{ url_for('serve_image', file_id=file.file_id, page_number=1) }}" alt="Page 1"
-                                 class="max-w-full max-h-80 object-contain rounded shadow-sm cursor-zoom-in"
-                                 onclick="openImageModal(this.src)">
-                        </div>
-                    </div>
+/* ── Fullscreen Modal ── */
+.fullscreen-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,12,20,.96);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn .25s var(--ease);
+}
+.modal-topbar {
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-6);
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  flex-shrink: 0;
+}
+.modal-topbar-btn {
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.85);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: var(--r-sm);
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: .875rem;
+}
+.modal-topbar-btn:hover { background: rgba(255,255,255,.18); }
 
-                    <!-- Filmstrip Gallery -->
-                    <div class="border-t border-gray-200 p-3 bg-white">
-                        <div
-                            class="flex space-x-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                            {% for page in pages %}
-                            <div class="flex-shrink-0 w-16 cursor-pointer transition-all duration-200 hover:scale-105"
-                                onclick="showPage({{ page.page_number }})">
-                                <div class="border border-gray-300 rounded p-1 bg-white page-thumbnail {% if page.page_number == 1 %}border-green-500 bg-green-50{% endif %}"
-                                    id="thumb-{{ page.page_number }}">
-                                    <img src="{{ url_for('serve_image', file_id=file.file_id, page_number=page.page_number) }}"
-                                        alt="Page {{ page.page_number }}" class="w-full h-12 object-cover rounded">
-                                    <div class="mt-1 text-center">
-                                        <span class="text-xs font-medium text-gray-700">{{ page.page_number }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
+/* ── Custom download modal ── */
+.dl-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(8px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  animation: fadeIn .2s var(--ease);
+}
 
-                    <!-- Quick Navigation -->
-                    <div class="border-t border-gray-200 px-3 py-2 bg-gray-50 flex justify-between items-center">
-                        <button onclick="jumpToPage(1)" class="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                            <i class="fas fa-fast-backward mr-1"></i>First
-                        </button>
-                        <span class="text-xs text-gray-500">Click thumbnails or use arrows</span>
-                        <button onclick="jumpToPage({{ pages|length }})"
-                            class="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                            Last<i class="fas fa-fast-forward ml-1"></i>
-                        </button>
-                    </div>
-                </div>
-                <p class="text-xs text-gray-500 text-center">Click image to view full size</p>
-            </div>
+/* ── Stat filter cards ── */
+.filter-card {
+  cursor: pointer;
+  transition: var(--transition);
+  border-width: 2px;
+}
+.filter-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.filter-card.selected { border-color: var(--primary); background: var(--green-50); }
 
-            <!-- Extracted Text -->
-            <div>
-                <h4 class="text-sm font-medium text-gray-700 mb-2">Extracted Text</h4>
-                <div class="border border-gray-200 rounded-lg h-96 flex flex-col">
-                    <textarea id="current-page-text"
-                        class="w-full h-full p-3 text-sm border-0 focus:ring-1 focus:ring-green-500 rounded-lg resize-none"
-                        placeholder="No text extracted"></textarea>
-                    <div class="px-3 py-2 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
-                        <span id="current-page-confidence" class="text-xs text-gray-500">
-                            Confidence: 0%
-                        </span>
-                        <button onclick="updateCurrentPageText()"
-                            class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition">
-                            Save Changes
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Image Viewer Modal (Phase 1) -->
-<div id="imageModal" class="fixed inset-0 bg-gray-900/95 hidden z-[150] flex flex-col select-none modal-transition backdrop-blur-sm">
-    <!-- Top Action Bar -->
-    <div class="h-16 flex items-center justify-between px-6 bg-gradient-to-b from-black/60 to-transparent absolute top-0 left-0 right-0 z-[160]">
-        <div class="flex items-center space-x-4">
-             <div class="px-3 py-1 bg-white/10 rounded-full border border-white/20 text-white text-[11px] font-bold tracking-tight">
-                VIEWER
-             </div>
-             <div id="modal-counter" class="text-white text-xs font-medium opacity-80 uppercase tracking-widest">0 / 0</div>
-        </div>
-        
-        <div class="flex items-center space-x-2">
-            <button onclick="changeViewerZoom(0.2)" class="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all" title="Zoom In">
-                <i class="fas fa-search-plus"></i>
-            </button>
-            <button onclick="changeViewerZoom(-0.2)" class="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all" title="Zoom Out">
-                <i class="fas fa-search-minus"></i>
-            </button>
-            <button onclick="resetViewerZoom()" class="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all" title="Reset Zoom">
-                <i class="fas fa-expand"></i>
-            </button>
-            <div class="h-6 w-px bg-white/10 mx-2"></div>
-            <button onclick="closeImageModal()" class="p-2 text-white hover:bg-red-500/80 rounded-lg transition-all" title="Close">
-                <i class="fas fa-times text-lg"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- Navigation Overlay -->
-    <button id="modal-prev" onclick="navigateModalImage(-1)" 
-        class="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center text-white bg-black/20 hover:bg-black/80 rounded-full transition-all z-[160] border border-white/10 backdrop-blur-sm disabled:opacity-0 pointer-events-auto">
-        <i class="fas fa-chevron-left"></i>
-    </button>
-    <button id="modal-next" onclick="navigateModalImage(1)" 
-        class="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center text-white bg-black/20 hover:bg-black/80 rounded-full transition-all z-[160] border border-white/10 backdrop-blur-sm disabled:opacity-0 pointer-events-auto">
-        <i class="fas fa-chevron-right"></i>
-    </button>
-
-    <!-- Main Viewport -->
-    <div class="flex-1 relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing" id="modal-viewport">
-        <!-- Image Container for Pan/Zoom -->
-        <div id="modal-image-wrapper" class="transition-transform duration-200 ease-out preserve-3d">
-            <img id="modalImage" src="" alt="Full size" 
-                class="shadow-2xl rounded-sm pointer-events-none select-none max-w-none max-h-none">
-        </div>
-    </div>
-
-    <!-- Zoom Percent Indicator -->
-    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/60 rounded-2xl backdrop-blur-md border border-white/10 text-white text-[10px] font-black tracking-widest z-[160] uppercase shadow-2xl">
-        Zoom <span id="zoom-indicator">100%</span>
-    </div>
-</div>
-
-<!-- Store page data in JavaScript -->
-<script>
-    let pagesData = {
-        {% for page in pages %}
-        {{ page.page_number }}: {
-            page_id: '{{ page.page_id }}',
-            has_remarks: {{ 'true' if page.has_remarks else 'false' }},
-            extracted_text: {{ page.extracted_text | tojson }},
-            confidence_score: {{ page.confidence_score or 0 }},
-            image_url: "{{ url_for('serve_image', file_id=file.file_id, page_number=page.page_number) }}"
-        },
-        {% endfor %}
-    };
-    let currentPagesList = Object.keys(pagesData).map(Number).sort((a, b) => a - b);
-    const ALL_PAGES = [...currentPagesList]; // Keep track of all pages for the multi-select modal
-</script>
-
-<!-- Multi-Download Modal -->
-<div id="multi-dl-modal" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm hidden z-[300] flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
-        <div class="px-8 py-6 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-            <div>
-                <h3 class="text-xl font-bold text-gray-900">Custom Selection</h3>
-                <p class="text-xs text-gray-500 mt-1 uppercase tracking-widest font-semibold">Select reports for combined PDF</p>
-            </div>
-            <button onclick="closeMultiDownloadModal()" class="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                <i class="fas fa-times text-gray-500"></i>
-            </button>
-        </div>
-        
-        <div class="p-8">
-            <div class="flex items-center justify-between mb-4 px-2">
-                <button onclick="toggleModalSelection(true)" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider">Select All</button>
-                <div class="h-4 w-px bg-gray-200"></div>
-                <button onclick="toggleModalSelection(false)" class="text-xs font-bold text-gray-500 hover:text-gray-700 uppercase tracking-wider">Clear All</button>
-            </div>
-            
-            <div id="multi-dl-list" class="max-h-64 overflow-y-auto pr-2 space-y-2 scrollbar-thin">
-                <!-- Checklist populated via JS -->
-            </div>
-            
-            <button onclick="processCombinedDownload()" 
-                class="w-full mt-8 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center space-x-3">
-                <i class="fas fa-file-pdf"></i>
-                <span>Download Combined PDF</span>
-            </button>
-        </div>
-    </div>
-</div>
+/* Download dropdown */
+.dl-dropdown {
+  position: absolute;
+  top: calc(100% + var(--sp-2));
+  right: 0;
+  width: 230px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xl);
+  padding: var(--sp-2);
+  z-index: 200;
+  animation: zoomIn .15s var(--ease);
+}
+.dl-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-3);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-800);
+  transition: var(--transition);
+}
+.dl-item:hover { background: var(--surface-alt); }
+.dl-item i { width: 16px; text-align: center; }
+</style>
 {% endblock %}
 
-{% block scripts %}
-<!-- jsPDF library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+{% block content %}
+<div class="animate-fade">
 
-<script>
-    let currentPage = 1;
-    let totalPages = {{ pages|length }};
+  <!-- ── Page Header ── -->
+  <div class="page-header">
+    <div>
+      <div class="breadcrumb">
+        <a href="{{ url_for('dashboard.dashboard') }}">
+          <i class="fas fa-arrow-left" style="margin-right:4px;"></i>Dashboard
+        </a>
+        <span class="breadcrumb-sep">/</span>
+        <span style="color:var(--text-muted);">{{ file.file_name }}</span>
+      </div>
+      <h1 class="page-header-title" style="font-size:var(--text-2xl);">{{ file.file_name }}</h1>
+      <p class="page-header-sub">
+        Processed on {{ file.upload_timestamp.strftime('%B %d, %Y at %I:%M %p') }}
+      </p>
+    </div>
 
-    function initializeArrowButtons() {
-        // Set up initial event listeners for arrow buttons
-        document.getElementById('prev-page').addEventListener('click', () => {
-            const currentIndex = currentPagesList.indexOf(currentPage);
-            if (currentIndex > 0) {
-                showPage(currentPagesList[currentIndex - 1]);
-            }
-        });
-        
-        document.getElementById('next-page').addEventListener('click', () => {
-            const currentIndex = currentPagesList.indexOf(currentPage);
-            if (currentIndex < currentPagesList.length - 1) {
-                showPage(currentPagesList[currentIndex + 1]);
-            }
-        });
-    }
+    <div style="display:flex; gap:var(--sp-3); align-items:center; flex-wrap:wrap;">
+      <!-- Editor button (shown only when page has remarks) -->
+      <button id="edit-report-btn" onclick="openCanvasEditor()"
+              class="btn btn-primary {% if not file.pages_with_remarks %}hidden{% endif %}">
+        <i class="fas fa-pen-nib"></i>
+        Open Editor
+      </button>
 
-    function filterPages(filterType) {
-        // Update UI active state
-        document.querySelectorAll('[id^="filter-"]').forEach(el => {
-            el.classList.remove('ring-2', 'ring-blue-500');
-        });
-        document.getElementById(`filter-${filterType}`).classList.add('ring-2', 'ring-blue-500');
+      <!-- PDF Export dropdown -->
+      <div style="position:relative;">
+        <button onclick="toggleDownloadOptions()" id="export-btn" class="btn btn-secondary" aria-haspopup="true">
+          <i class="fas fa-file-pdf"></i>
+          Export PDF
+          <i class="fas fa-chevron-down" style="font-size:.7rem; margin-left:2px;"></i>
+        </button>
+        <div id="download-options-menu" class="dl-dropdown hidden">
+          <div class="dl-item" onclick="generatePDF('single')">
+            <i class="fas fa-file-invoice" style="color:var(--primary);"></i>
+            Current Page
+          </div>
+          <div class="dl-item" onclick="generatePDF('with_remarks')">
+            <i class="fas fa-flag" style="color:var(--warning);"></i>
+            Flagged Pages Only
+          </div>
+          <div class="dl-item" onclick="generatePDF('without_remarks')">
+            <i class="fas fa-check-circle" style="color:var(--success);"></i>
+            Clean Pages Only
+          </div>
+          <div style="height:1px; background:var(--border); margin:var(--sp-2) 0;"></div>
+          <div class="dl-item" onclick="openMultiDownloadModal()">
+            <i class="fas fa-layer-group" style="color:var(--info);"></i>
+            Custom Selection…
+          </div>
+        </div>
+      </div>
 
-        // Fetch filtered pages
-        fetch(`/api/file/{{ file.file_id }}?filter=${filterType}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update pages data
-                    pagesData = {};
-                    data.pages.forEach(page => {
-                        pagesData[page.page_number] = {
-                            page_id: page.page_id,
-                            has_remarks: page.has_remarks,
-                            extracted_text: page.extracted_text,
-                            confidence_score: page.confidence_score || 0,
-                            image_url: `/image/{{ file.file_id }}/${page.page_number}`
-                        };
-                    });
+      <!-- Delete button -->
+      <button onclick="deleteFile('{{ file.file_id }}')" class="btn btn-danger btn-icon" title="Delete this report"
+              aria-label="Delete report">
+        <i class="fas fa-trash-alt"></i>
+      </button>
+    </div>
+  </div>
 
-                    currentPagesList = data.pages.map(p => p.page_number).sort((a, b) => a - b);
-                    totalPages = currentPagesList.length;
-                    document.getElementById('total-pages-count').textContent = totalPages;
+  <!-- ── Summary Stats Row ── -->
+  <div class="stats-row mb-6">
 
-                    // Re-render filmstrip
-                    const filmstrip = document.querySelector('.overflow-x-auto');
-                    filmstrip.innerHTML = '';
+    <div id="filter-all" onclick="filterPages('all')" class="card filter-card selected stat-mini">
+      <div class="stat-mini-icon" style="background:var(--surface-alt); color:var(--text-faint);">
+        <i class="fas fa-file-lines"></i>
+      </div>
+      <div>
+        <div class="stat-mini-label">Total Pages</div>
+        <div class="stat-mini-val">{{ file.total_pages }}</div>
+      </div>
+    </div>
 
-                    currentPagesList.forEach(pageNum => {
-                        const page = pagesData[pageNum];
-                        const div = document.createElement('div');
-                        div.className = 'flex-shrink-0 w-16 cursor-pointer transition-all duration-200 hover:scale-105';
-                        div.onclick = () => showPage(pageNum);
-                        div.innerHTML = `
-                        <div class="border border-gray-300 rounded p-1 bg-white page-thumbnail" id="thumb-${pageNum}">
-                            <img src="${page.image_url}"
-                                 alt="Page ${pageNum}"
-                                 class="w-full h-12 object-cover rounded">
-                            <div class="mt-1 text-center">
-                                <span class="text-xs font-medium text-gray-700">${pageNum}</span>
-                            </div>
-                        </div>
-                    `;
-                        filmstrip.appendChild(div);
-                    });
+    <div id="filter-with_remarks" onclick="filterPages('with_remarks')" class="card filter-card stat-mini">
+      <div class="stat-mini-icon" style="background:var(--warning-light); color:var(--warning);">
+        <i class="fas fa-flag"></i>
+      </div>
+      <div>
+        <div class="stat-mini-label">Flagged</div>
+        <div class="stat-mini-val" style="color:var(--warning);">{{ file.pages_with_remarks }}</div>
+      </div>
+    </div>
 
-                    // Re-initialize arrow buttons after filtering
-                    initializeArrowButtons();
+    <div id="filter-without_remarks" onclick="filterPages('without_remarks')" class="card filter-card stat-mini">
+      <div class="stat-mini-icon" style="background:var(--success-light); color:var(--success);">
+        <i class="fas fa-check-circle"></i>
+      </div>
+      <div>
+        <div class="stat-mini-label">Clean</div>
+        <div class="stat-mini-val" style="color:var(--success);">{{ file.pages_without_remarks }}</div>
+      </div>
+    </div>
 
-                    // Show first page of filtered results
-                    if (currentPagesList.length > 0) {
-                        showPage(currentPagesList[0]);
-                    } else {
-                        // Handle empty state
-                        document.getElementById('current-page-image').src = ''; // Or a placeholder
-                        document.getElementById('current-page-image').alt = 'No pages found';
-                        document.getElementById('current-page-text').value = '';
-                        document.getElementById('current-page-status').textContent = '';
-                        document.getElementById('current-page-status').className = 'hidden';
-                    }
-                }
-            })
-            .catch(error => console.error('Error filtering pages:', error));
-    }
+    <div class="card stat-mini" style="cursor:default;">
+      <div class="stat-mini-icon" style="background:{{ 'var(--danger-light)' if file.criticality_level=='RED' else 'var(--warning-light)' if file.criticality_level=='ORANGE' else 'var(--success-light)' }}; color:{{ 'var(--danger)' if file.criticality_level=='RED' else 'var(--warning)' if file.criticality_level=='ORANGE' else 'var(--success)' }};">
+        <i class="fas fa-shield-halved"></i>
+      </div>
+      <div>
+        <div class="stat-mini-label">Risk Level</div>
+        <div class="stat-mini-val" style="color:{{ 'var(--danger)' if file.criticality_level=='RED' else 'var(--warning)' if file.criticality_level=='ORANGE' else 'var(--success)' }};">
+          {{ file.criticality_level }}
+        </div>
+      </div>
+    </div>
 
-    function showPage(pageNumber) {
-        if (!currentPagesList.includes(pageNumber)) return;
+  </div>
 
-        currentPage = pageNumber;
-        const pageData = pagesData[pageNumber];
+  <!-- ── Main Viewer Card ── -->
+  <div class="card" style="padding:0; overflow:hidden;">
 
-        // Update main display
-        document.getElementById('current-page').textContent = pageNumber; // Show actual page number
-        document.getElementById('current-page-title').textContent = `Page ${pageNumber}`;
-        document.getElementById('current-page-image').src = pageData.image_url;
-        document.getElementById('current-page-image').alt = `Page ${pageNumber}`;
-        document.getElementById('current-page-text').value = pageData.extracted_text || '';
-        // Confidence score logic: Show 100% if no remarks, otherwise show actual score
-        const confidence = pageData.has_remarks ? pageData.confidence_score : 1.0;
-        document.getElementById('current-page-confidence').textContent = `Confidence: ${(confidence * 100).toFixed(1)}%`;
+    <!-- Card header -->
+    <div style="padding:var(--sp-4) var(--sp-6); border-bottom:1px solid var(--border); background:var(--surface-alt); display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h2 style="font-size:var(--text-base); font-weight:700; margin:0;">Page Viewer</h2>
+      </div>
+      <div style="background:var(--white); padding:0.3rem var(--sp-3); border-radius:var(--r-sm); border:1px solid var(--border); font-size:var(--text-sm); font-weight:700; font-family:'Sora',sans-serif;">
+        Page <span id="current-page">1</span>
+        <span style="color:var(--text-faint); font-weight:400; margin:0 4px;">/</span>
+        <span id="total-pages-count">{{ pages|length }}</span>
+      </div>
+    </div>
 
-        // Update status badge
-        const statusElement = document.getElementById('current-page-status');
-        if (pageData.has_remarks) {
-            statusElement.textContent = 'Has Remarks';
-            statusElement.className = 'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800';
-            document.getElementById('current-page-text').disabled = false;
-        } else {
-            statusElement.textContent = 'No Remarks';
-            statusElement.className = 'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800';
-            document.getElementById('current-page-text').disabled = true;
-            document.getElementById('current-page-text').value = 'No handwritten remarks detected on this page';
-        }
+    <!-- Viewer grid -->
+    <div class="viewer-grid">
 
-        // Update thumbnails
-        document.querySelectorAll('.page-thumbnail').forEach(thumb => {
-            thumb.classList.remove('border-green-500', 'bg-green-50');
-        });
-        document.getElementById(`thumb-${pageNumber}`).classList.add('border-green-500', 'bg-green-50');
+      <!-- Left: image viewer -->
+      <div style="display:flex; flex-direction:column; padding:var(--sp-4); gap:var(--sp-3); min-width:0;">
 
-        // Update navigation buttons state
-        const currentIndex = currentPagesList.indexOf(currentPage);
-        document.getElementById('prev-page').disabled = currentIndex <= 0;
-        document.getElementById('next-page').disabled = currentIndex >= currentPagesList.length - 1;
+        <!-- Image stage -->
+        <div class="image-stage" style="border-radius:var(--r-lg);">
+          <img id="current-page-image"
+               src="{{ url_for('serve_image', file_id=file.file_id, page_number=1) }}"
+               alt="Inspection page image"
+               onclick="openImageModal(this.src)"
+               title="Click to view fullscreen">
 
-        // Toggle "Edit Report" button visibility (v8 Fix)
-        const editBtn = document.getElementById('edit-report-btn');
-        if (pageData.has_remarks) {
-            editBtn.classList.remove('hidden');
-        } else {
-            editBtn.classList.add('hidden');
-        }
-    }
+          <!-- Status badge overlay -->
+          <span id="current-page-status" style="position:absolute; top:var(--sp-3); right:var(--sp-3);">
+            <span class="badge badge-orange"><i class="fas fa-flag" style="font-size:.55rem; margin-right:3px;"></i>Has Remarks</span>
+          </span>
 
-    function updateCurrentPageText() {
-        const pageData = pagesData[currentPage];
-        const textarea = document.getElementById('current-page-text');
-        const text = textarea.value;
+          <!-- Zoom-hint label -->
+          <span style="position:absolute; bottom:var(--sp-3); left:50%; transform:translateX(-50%); background:rgba(0,0,0,.45); color:white; font-size:var(--text-xs); font-weight:700; padding:0.2rem 0.6rem; border-radius:var(--r-full); backdrop-filter:blur(4px); pointer-events:none; white-space:nowrap;">
+            <i class="fas fa-expand" style="margin-right:4px; font-size:.6rem;"></i>Click to enlarge
+          </span>
 
-        // Don't save if it's the default "no remarks" text
-        if (!pageData.has_remarks && text === 'No handwritten remarks detected on this page') {
-            return;
-        }
+          <!-- Nav arrows -->
+          <button id="prev-page" class="nav-arrow" aria-label="Previous page">
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <button id="next-page" class="nav-arrow" aria-label="Next page">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
 
-        fetch(`/api/page/${pageData.page_id}/update-text`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text: text })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification('Text updated successfully', 'success');
-                    // Update local data
-                    pagesData[currentPage].extracted_text = text;
-                } else {
-                    showNotification('Error updating text: ' + data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showNotification('Error updating text: ' + error.message, 'error');
-            });
-    }
-
-    function jumpToPage(pageNumber) {
-        showPage(pageNumber);
-        // Scroll filmstrip to show the selected page
-        const thumbElement = document.getElementById(`thumb-${pageNumber}`).parentElement;
-        if (thumbElement) {
-            thumbElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-    }
-
-    function deleteFile(fileId) {
-        if (!confirm('Are you sure you want to delete this file and all its images? This action cannot be undone.')) {
-            return;
-        }
-
-        fetch(`/api/file/${fileId}/delete`, {
-            method: 'DELETE'
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification('File and images deleted successfully', 'success');
-                    setTimeout(() => {
-                        window.location.href = "{{ url_for('dashboard.dashboard') }}";
-                    }, 1000);
-                } else {
-                    showNotification('Error deleting file: ' + data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showNotification('Error deleting file: ' + error.message, 'error');
-            });
-    }
-
-    function toggleDownloadOptions() {
-        const menu = document.getElementById('download-options-menu');
-        menu.classList.toggle('hidden');
-    }
-
-    // PDF Generation Logic (v20 Fix: Zero Margins & Granular Selection)
-    async function generatePDF(mode) {
-        if (mode === 'custom') return openMultiDownloadModal();
-        
-        toggleDownloadOptions();
-        
-        let targetPages = [];
-        if (mode === 'single') {
-            targetPages = [currentPage];
-        } else if (mode === 'with_remarks') {
-            targetPages = ALL_PAGES.filter(p => pagesData[p].has_remarks);
-        } else if (mode === 'without_remarks') {
-            targetPages = ALL_PAGES.filter(p => !pagesData[p].has_remarks);
-        }
-
-        if (targetPages.length === 0) {
-            return showNotification('No reports found for this selection.', 'error');
-        }
-
-        buildPDF(targetPages, `Inspection_Report_${mode}.pdf`);
-    }
-
-    async function buildPDF(pageNumbers, filename) {
-        showNotification(`Generating PDF with ${pageNumbers.length} reports...`, 'info');
-        const { jsPDF } = window.jspdf;
-        let pdf = null;
-
-        try {
-            for (let i = 0; i < pageNumbers.length; i++) {
-                const pageNum = pageNumbers[i];
-                const imgUrl = pagesData[pageNum].image_url;
-                const img = await loadImageSafe(imgUrl);
-                
-                const orientation = img.width > img.height ? 'l' : 'p';
-                
-                if (!pdf) {
-                    pdf = new jsPDF({
-                        orientation: orientation,
-                        unit: 'px',
-                        format: [img.width, img.height],
-                        hotfixes: ['px_scaling']
-                    });
-                } else {
-                    pdf.addPage([img.width, img.height], orientation);
-                }
-                
-                // Zero-margin high-res placement
-                pdf.addImage(img, 'PNG', 0, 0, img.width, img.height, undefined, 'FAST');
-            }
-            
-            pdf.save(filename);
-            showNotification('PDF downloaded successfully', 'success');
-        } catch (err) {
-            showNotification('Error generating PDF: ' + err.message, 'error');
-        }
-    }
-
-    // Modal Helpers
-    function openMultiDownloadModal() {
-        toggleDownloadOptions();
-        const list = document.getElementById('multi-dl-list');
-        list.innerHTML = ALL_PAGES.map(pageNum => `
-            <label class="flex items-center p-4 hover:bg-gray-50 rounded-2xl transition-colors cursor-pointer group">
-                <input type="checkbox" checked class="w-5 h-5 accent-indigo-600 ml-2 dl-checkbox" data-num="${pageNum}">
-                <div class="ml-4 flex-1">
-                    <p class="text-sm font-bold text-gray-800">Report Page ${pageNum}</p>
-                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                        ${pagesData[pageNum].has_remarks ? '<span class="text-orange-500">Has Remarks</span>' : '<span class="text-green-500">No Remarks</span>'}
-                    </p>
-                </div>
-                <div class="h-8 w-8 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-50 transition-colors">
-                    <i class="fas fa-file-image text-gray-400 group-hover:text-indigo-600 text-xs"></i>
-                </div>
-            </label>
-        `).join('');
-        document.getElementById('multi-dl-modal').classList.remove('hidden');
-    }
-
-    function closeMultiDownloadModal() {
-        document.getElementById('multi-dl-modal').classList.add('hidden');
-    }
-
-    function toggleModalSelection(val) {
-        document.querySelectorAll('.dl-checkbox').forEach(c => c.checked = val);
-    }
-
-    function processCombinedDownload() {
-        const selected = [...document.querySelectorAll('.dl-checkbox:checked')].map(c => parseInt(c.dataset.num));
-        if (selected.length === 0) return showNotification('Please select at least one report.', 'error');
-        
-        closeMultiDownloadModal();
-        buildPDF(selected.sort((a,b) => a-b), 'Custom_Inspection_Report.pdf');
-    }
-
-    function loadImageSafe(url) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('Failed to load image: ' + url));
-            img.src = url;
-        });
-    }
-
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-        // Only trigger if editor is closed
-        if (!document.getElementById('canvas-editor-overlay').classList.contains('hidden')) return;
-
-        const currentIndex = currentPagesList.indexOf(currentPage);
-        if (e.key === 'ArrowLeft') {
-            if (currentIndex > 0) showPage(currentPagesList[currentIndex - 1]);
-        } else if (e.key === 'ArrowRight') {
-            if (currentIndex < currentPagesList.length - 1) showPage(currentPagesList[currentIndex + 1]);
-        }
-    });
-
-    // Improved Modal Viewer Logic (Phase 1)
-    let modalCurrentImageIndex = 0;
-    let viewerTransform = { scale: 1, x: 0, y: 0 };
-    let isPanning = false;
-    let startPanPos = { x: 0, y: 0 };
-
-    function openImageModal(src) {
-        modalCurrentImageIndex = currentPagesList.indexOf(currentPage);
-        document.getElementById('imageModal').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-        
-        loadModalImage(src);
-        
-        // Attach event listeners
-        const viewport = document.getElementById('modal-viewport');
-        viewport.onwheel = handleModalWheel;
-        viewport.onmousedown = startPanning;
-        window.onmousemove = doPanning;
-        window.onmouseup = stopPanning;
-        
-        document.addEventListener('keydown', handleModalKeydown);
-    }
-
-    function loadModalImage(src) {
-        const img = document.getElementById('modalImage');
-        img.src = src;
-        img.onload = () => {
-            // Default "Fit to Screen"
-            const viewport = document.getElementById('modal-viewport');
-            const kw = (viewport.clientWidth - 100) / img.naturalWidth;
-            const kh = (viewport.clientHeight - 100) / img.naturalHeight;
-            viewerTransform.scale = Math.min(kw, kh, 1);
-            viewerTransform.x = 0;
-            viewerTransform.y = 0;
-            applyViewerTransform();
-            updateModalContent();
-        };
-    }
-
-    function closeImageModal() {
-        document.getElementById('imageModal').classList.add('hidden');
-        document.body.style.overflow = 'auto';
-        document.removeEventListener('keydown', handleModalKeydown);
-    }
-
-    function applyViewerTransform() {
-        const wrapper = document.getElementById('modal-image-wrapper');
-        wrapper.style.transform = `translate3d(${viewerTransform.x}px, ${viewerTransform.y}px, 0) scale(${viewerTransform.scale})`;
-        document.getElementById('zoom-indicator').textContent = `${Math.round(viewerTransform.scale * 100)}%`;
-    }
-
-    function handleModalWheel(e) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        zoomAtPoint(e.clientX, e.clientY, delta);
-    }
-
-    function zoomAtPoint(clientX, clientY, delta) {
-        const viewport = document.getElementById('modal-viewport');
-        const rect = viewport.getBoundingClientRect();
-        
-        const x = clientX - rect.left - rect.width / 2;
-        const y = clientY - rect.top - rect.height / 2;
-
-        const oldScale = viewerTransform.scale;
-        const newScale = Math.max(0.1, Math.min(5, oldScale * delta));
-        
-        // Adjust translation to keep point under cursor
-        const ratio = newScale / oldScale;
-        viewerTransform.x = x - (x - viewerTransform.x) * ratio;
-        viewerTransform.y = y - (y - viewerTransform.y) * ratio;
-        viewerTransform.scale = newScale;
-        
-        applyViewerTransform();
-    }
-
-    function changeViewerZoom(deltaStep) {
-        const viewport = document.getElementById('modal-viewport');
-        const cx = viewport.clientWidth / 2 + viewport.offsetLeft;
-        const cy = viewport.clientHeight / 2 + viewport.offsetTop;
-        zoomAtPoint(cx, cy, 1 + deltaStep);
-    }
-
-    function resetViewerZoom() {
-        const img = document.getElementById('modalImage');
-        if (img.src) loadModalImage(img.src);
-    }
-
-    function startPanning(e) {
-        isPanning = true;
-        startPanPos = { x: e.clientX - viewerTransform.x, y: e.clientY - viewerTransform.y };
-    }
-    function doPanning(e) {
-        if (!isPanning) return;
-        viewerTransform.x = e.clientX - startPanPos.x;
-        viewerTransform.y = e.clientY - startPanPos.y;
-        applyViewerTransform();
-    }
-    function stopPanning() { isPanning = false; }
-
-    function navigateModalImage(direction) {
-        const nextIndex = modalCurrentImageIndex + direction;
-        if (nextIndex >= 0 && nextIndex < currentPagesList.length) {
-            modalCurrentImageIndex = nextIndex;
-            const page = pagesData[currentPagesList[modalCurrentImageIndex]];
-            loadModalImage(page.image_url);
-        }
-    }
-
-    function updateModalContent() {
-        document.getElementById('modal-counter').textContent = `${modalCurrentImageIndex + 1} / ${currentPagesList.length}`;
-        document.getElementById('modal-prev').disabled = modalCurrentImageIndex === 0;
-        document.getElementById('modal-next').disabled = modalCurrentImageIndex === currentPagesList.length - 1;
-    }
-
-    function handleModalKeydown(e) {
-        if (e.key === 'ArrowLeft') navigateModalImage(-1);
-        else if (e.key === 'ArrowRight') navigateModalImage(1);
-        else if (e.key === 'Escape') closeImageModal();
-        else if (e.key === '+' || e.key === '=') changeViewerZoom(0.2);
-        else if (e.key === '-') changeViewerZoom(-0.2);
-        else if (e.key === '0') resetViewerZoom();
-    }
-
-    function showNotification(message, type) {
-        const notification = document.createElement('div');
-        notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg text-white ${type === 'success' ? 'bg-green-600' : type === 'info' ? 'bg-indigo-600' : 'bg-red-600'} z-[300]`;
-        notification.innerHTML = `
-            <div class="flex items-center">
-                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} mr-2"></i>
-                <span>${message}</span>
+        <!-- Filmstrip -->
+        <div class="filmstrip">
+          {% for page in pages %}
+          <div class="thumb-wrap" onclick="showPage({{ page.page_number }})">
+            <div id="thumb-{{ page.page_number }}" class="thumb-inner {% if loop.first %}active{% endif %}">
+              <img src="{{ url_for('serve_image', file_id=file.file_id, page_number=page.page_number) }}"
+                   alt="Page {{ page.page_number }} thumbnail" loading="lazy">
+              {% if page.has_remarks %}
+              <div style="position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--warning); border-radius:50%; border:1.5px solid white;" title="Has remarks"></div>
+              {% endif %}
             </div>
-        `;
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 3000);
+            <div class="thumb-num">{{ page.page_number }}</div>
+          </div>
+          {% endfor %}
+        </div>
+
+      </div><!-- /left panel -->
+
+      <!-- Right: remarks panel -->
+      <div class="remarks-panel">
+
+        <!-- Panel header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-3);">
+          <div style="display:flex; align-items:center; gap:var(--sp-2);">
+            <div style="width:28px; height:28px; background:var(--green-100); border-radius:var(--r-sm); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <i class="fas fa-align-left" style="font-size:.7rem; color:var(--primary);"></i>
+            </div>
+            <h3 style="font-size:var(--text-sm); font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--text-main); margin:0;">
+              Extracted Remarks
+            </h3>
+          </div>
+          <span id="current-page-confidence"
+                style="font-size:var(--text-xs); font-weight:800; color:var(--primary); background:var(--green-100); padding:0.2rem 0.6rem; border-radius:var(--r-full); border:1px solid var(--green-200); white-space:nowrap;">
+            AI: 0%
+          </span>
+        </div>
+
+        <!-- Status chip -->
+        <div id="remarks-status-banner" style="background:var(--warning-light); border:1px solid rgba(245,158,11,.25); border-radius:var(--r-md); padding:var(--sp-3); margin-bottom:var(--sp-3); display:flex; align-items:center; gap:var(--sp-2);">
+          <i class="fas fa-flag" style="color:var(--warning); font-size:.8rem; flex-shrink:0;"></i>
+          <span style="font-size:var(--text-xs); font-weight:700; color:#92400e;">This page has handwritten remarks — text extracted by AI is shown below.</span>
+        </div>
+
+        <!-- Editable textarea -->
+        <textarea id="current-page-text"
+                  class="input"
+                  style="flex:1; width:100%; min-height:200px; resize:vertical; font-size:var(--text-sm); line-height:1.75; font-family:'Manrope',sans-serif; margin-bottom:var(--sp-3);"
+                  placeholder="No remarks on this page. Select a flagged page (orange dot) from the filmstrip to view extracted text."></textarea>
+
+        <!-- Helper text -->
+        <p style="font-size:var(--text-xs); color:var(--text-faint); line-height:1.55; margin-bottom:var(--sp-4); display:flex; gap:var(--sp-2); align-items:flex-start;">
+          <i class="fas fa-pencil" style="color:var(--primary); margin-top:1px; flex-shrink:0;"></i>
+          <span>AI-extracted text is editable. Make corrections and click <strong>Save Changes</strong> to update the record.</span>
+        </p>
+
+        <button onclick="updateCurrentPageText()"
+                id="save-remarks-btn"
+                class="btn btn-primary"
+                style="width:100%;">
+          <i class="fas fa-floppy-disk"></i>
+          Save Changes
+        </button>
+
+      </div><!-- /remarks-panel -->
+
+    </div><!-- /.viewer-grid -->
+  </div><!-- /.card -->
+
+</div><!-- /.animate-fade -->
+
+<!-- ════════════════════════════════════════
+     FULLSCREEN IMAGE VIEWER MODAL
+════════════════════════════════════════ -->
+<div id="imageModal" class="fullscreen-modal hidden">
+  <!-- Top bar -->
+  <div class="modal-topbar">
+    <div style="display:flex; align-items:center; gap:var(--sp-4);">
+      <div style="background:var(--primary); color:white; font-size:var(--text-xs); font-weight:800; padding:0.25rem 0.75rem; border-radius:var(--r-sm); letter-spacing:.08em; text-transform:uppercase;">
+        Viewer
+      </div>
+      <div id="modal-counter" style="font-size:var(--text-sm); font-weight:700; color:rgba(255,255,255,.7); font-family:'Sora',sans-serif;">1 / 1</div>
+    </div>
+    <div style="display:flex; gap:var(--sp-2);">
+      <button onclick="changeViewerZoom(0.2)"  class="modal-topbar-btn" title="Zoom in"><i class="fas fa-plus"></i></button>
+      <button onclick="changeViewerZoom(-0.2)" class="modal-topbar-btn" title="Zoom out"><i class="fas fa-minus"></i></button>
+      <button onclick="resetViewerZoom()"      class="modal-topbar-btn" title="Reset zoom"><i class="fas fa-expand"></i></button>
+      <button onclick="closeImageModal()"      class="modal-topbar-btn" style="background:rgba(239,68,68,.3); border-color:rgba(239,68,68,.3);" title="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Viewport -->
+  <div id="modal-viewport" style="flex:1; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:grab;">
+    <div id="modal-image-wrapper" style="transition:transform .2s cubic-bezier(.4,0,.2,1); transform-origin:center;">
+      <img id="modalImage" src="" alt="Full-size inspection page" style="max-width:none; border-radius:4px; box-shadow:0 30px 60px rgba(0,0,0,.5);">
+    </div>
+    <button id="modal-prev" onclick="navigateModalImage(-1)"
+      style="position:absolute; left:var(--sp-6); width:52px; height:52px; border-radius:50%; background:rgba(255,255,255,.08); color:white; border:1px solid rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition); font-size:1.25rem;">
+      <i class="fas fa-chevron-left"></i>
+    </button>
+    <button id="modal-next" onclick="navigateModalImage(1)"
+      style="position:absolute; right:var(--sp-6); width:52px; height:52px; border-radius:50%; background:rgba(255,255,255,.08); color:white; border:1px solid rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition); font-size:1.25rem;">
+      <i class="fas fa-chevron-right"></i>
+    </button>
+  </div>
+
+  <!-- Zoom label -->
+  <div style="position:absolute; bottom:var(--sp-6); left:50%; transform:translateX(-50%); background:rgba(255,255,255,.1); backdrop-filter:blur(10px); padding:0.4rem 1rem; border-radius:var(--r-full); border:1px solid rgba(255,255,255,.15); color:white; font-size:var(--text-xs); font-weight:800; letter-spacing:.08em; text-transform:uppercase;">
+    Zoom: <span id="zoom-indicator">80%</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     CUSTOM PAGE SELECTION MODAL
+════════════════════════════════════════ -->
+<div id="multi-dl-modal" class="dl-modal-overlay hidden">
+  <div class="card animate-fade" style="width:100%; max-width:480px; padding:0; overflow:hidden;">
+    <div style="padding:var(--sp-5) var(--sp-6); border-bottom:1px solid var(--border); background:var(--surface-alt); display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="font-size:var(--text-base); font-weight:700;">Select Pages to Export</h3>
+      <button onclick="closeMultiDownloadModal()" class="btn btn-ghost btn-icon" aria-label="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div style="padding:var(--sp-6);">
+      <div style="display:flex; gap:var(--sp-3); margin-bottom:var(--sp-4);">
+        <button onclick="toggleModalSelection(true)"  class="btn btn-secondary" style="flex:1; font-size:var(--text-xs);">
+          <i class="fas fa-check-double"></i> Select All
+        </button>
+        <button onclick="toggleModalSelection(false)" class="btn btn-ghost"  style="flex:1; font-size:var(--text-xs);">
+          <i class="fas fa-times"></i> Clear All
+        </button>
+      </div>
+      <div id="multi-dl-list" style="max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:var(--sp-2); padding-right:var(--sp-1);"></div>
+      <button onclick="processCombinedDownload()" class="btn btn-primary" style="width:100%; padding:0.875rem; margin-top:var(--sp-5);">
+        <i class="fas fa-file-export"></i>
+        Export Selected Pages
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Data injection -->
+<script>
+  let pagesData = {
+    {% for page in pages %}
+    {{ page.page_number }}: {
+      page_id:          '{{ page.page_id }}',
+      has_remarks:      {{ 'true' if page.has_remarks else 'false' }},
+      extracted_text:   {{ page.extracted_text | tojson }},
+      confidence_score: {{ page.confidence_score or 0 }},
+      image_url:        "{{ url_for('serve_image', file_id=file.file_id, page_number=page.page_number) }}"
+    },
+    {% endfor %}
+  };
+  let currentPagesList = Object.keys(pagesData).map(Number).sort((a,b)=>a-b);
+  const ALL_PAGES = [...currentPagesList];
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+let currentPage = 1;
+let totalPages  = {{ pages|length }};
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', () => {
+  initArrows();
+  if (currentPagesList.length > 0) showPage(currentPagesList[0]);
+});
+
+function initArrows() {
+  document.getElementById('prev-page').onclick = () => {
+    const idx = currentPagesList.indexOf(currentPage);
+    if (idx > 0) showPage(currentPagesList[idx - 1]);
+  };
+  document.getElementById('next-page').onclick = () => {
+    const idx = currentPagesList.indexOf(currentPage);
+    if (idx < currentPagesList.length - 1) showPage(currentPagesList[idx + 1]);
+  };
+}
+
+/* ── Filter pages by type ── */
+function filterPages(type) {
+  // Update filter card selected state
+  document.querySelectorAll('[id^="filter-"]').forEach(el => el.classList.remove('selected'));
+  const card = document.getElementById(`filter-${type}`);
+  if (card) card.classList.add('selected');
+
+  fetch(`/api/file/{{ file.file_id }}?filter=${type}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) return;
+      pagesData = {};
+      data.pages.forEach(p => {
+        pagesData[p.page_number] = {
+          page_id:          p.page_id,
+          has_remarks:      p.has_remarks,
+          extracted_text:   p.extracted_text,
+          confidence_score: p.confidence_score || 0,
+          image_url:        `/image/{{ file.file_id }}/${p.page_number}`
+        };
+      });
+      currentPagesList = data.pages.map(p => p.page_number).sort((a,b)=>a-b);
+      totalPages = currentPagesList.length;
+      document.getElementById('total-pages-count').textContent = totalPages;
+      if (currentPagesList.length > 0) showPage(currentPagesList[0]);
+    });
+}
+
+/* ── Show page ── */
+function showPage(num) {
+  if (!currentPagesList.includes(num)) return;
+  currentPage = num;
+  const d = pagesData[num];
+
+  document.getElementById('current-page').textContent       = num;
+  document.getElementById('current-page-image').src         = d.image_url;
+  document.getElementById('current-page-text').value        = d.extracted_text || '';
+  document.getElementById('current-page-text').disabled     = !d.has_remarks;
+  document.getElementById('current-page-confidence').textContent =
+    `Confidence: ${((d.has_remarks ? d.confidence_score : 1) * 100).toFixed(1)}%`;
+
+  const badge = document.getElementById('current-page-status');
+  badge.innerHTML = d.has_remarks
+    ? '<span class="badge badge-orange"><i class="fas fa-flag" style="margin-right:4px;"></i>Has Remarks</span>'
+    : '<span class="badge badge-green"><i class="fas fa-check" style="margin-right:4px;"></i>Clean Page</span>';
+
+  // Edit button visibility
+  document.getElementById('edit-report-btn').classList.toggle('hidden', !d.has_remarks);
+
+  // Thumbnails
+  document.querySelectorAll('.thumb-inner').forEach(t => t.classList.remove('active'));
+  const thumb = document.getElementById(`thumb-${num}`);
+  if (thumb) { thumb.classList.add('active'); thumb.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' }); }
+
+  // Arrow opacity
+  const idx = currentPagesList.indexOf(num);
+  document.getElementById('prev-page').disabled = idx <= 0;
+  document.getElementById('next-page').disabled = idx >= currentPagesList.length - 1;
+}
+
+/* ── Save text ── */
+function updateCurrentPageText() {
+  const d   = pagesData[currentPage];
+  const val = document.getElementById('current-page-text').value;
+  fetch(`/api/page/${d.page_id}/update-text`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: val })
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showNotification('Changes saved successfully', 'success');
+      pagesData[currentPage].extracted_text = val;
+    } else {
+      showNotification('Save failed: ' + res.message, 'error');
     }
+  });
+}
 
-    function exportExcel() {
-        showNotification('Generating Excel export...', 'info');
-        fetch('/api/export/excel', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_ids: ['{{ file.file_id }}'] })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const linkSource = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${data.excel_data}`;
-                const downloadLink = document.createElement("a");
-                downloadLink.href = linkSource;
-                downloadLink.download = data.filename;
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
-                showNotification('Export successful', 'success');
-            } else {
-                showNotification('Export failed: ' + data.error, 'error');
-            }
-        });
+/* ── PDF export ── */
+function toggleDownloadOptions() {
+  const menu = document.getElementById('download-options-menu');
+  menu.classList.toggle('hidden');
+  document.addEventListener('click', function closer(e) {
+    if (!document.getElementById('export-btn').contains(e.target)) {
+      menu.classList.add('hidden');
+      document.removeEventListener('click', closer);
     }
+  });
+}
 
-    // Advanced Editor Canvas Logic (Phase 3 & 4)
-    let canvas = null;
-    let editorCurrentPageIdx = 0;
-    let editorPages = []; 
-    let currentTool = 'select';
-    let canvasZoomLevel = 1.0;
-    let canvasDirty = false; // Track unsaved changes (v8 Fix)
-    let isSaving = false;
-
-    function openCanvasEditor() {
-        // Redirect to standalone high-performance editor (v12 Fix)
-        window.location.href = `/report-editor/{{ file.file_id }}?page=${currentPage}`;
+async function buildPDF(nums, name) {
+  showNotification('Generating PDF…', 'info');
+  const { jsPDF } = window.jspdf;
+  let pdf = null;
+  try {
+    for (const num of nums) {
+      const img   = await loadImg(pagesData[num].image_url);
+      const orient = img.width > img.height ? 'l' : 'p';
+      if (!pdf) pdf = new jsPDF({ orientation: orient, unit: 'px', format: [img.width, img.height] });
+      else       pdf.addPage([img.width, img.height], orient);
+      pdf.addImage(img, 'PNG', 0, 0, img.width, img.height);
     }
+    pdf.save(name);
+    showNotification('PDF exported successfully!', 'success');
+  } catch(e) { showNotification('PDF export failed. Please try again.', 'error'); }
+}
 
+async function generatePDF(mode) {
+  document.getElementById('download-options-menu').classList.add('hidden');
+  let target = [];
+  if (mode === 'single')          target = [currentPage];
+  else if (mode === 'with_remarks')    target = ALL_PAGES.filter(p =>  pagesData[p].has_remarks);
+  else if (mode === 'without_remarks') target = ALL_PAGES.filter(p => !pagesData[p].has_remarks);
+  if (target.length) buildPDF(target, `InspectionReport_${mode}.pdf`);
+  else showNotification('No pages match this filter.', 'info');
+}
+
+function openMultiDownloadModal() {
+  document.getElementById('download-options-menu').classList.add('hidden');
+  const list = document.getElementById('multi-dl-list');
+  list.innerHTML = ALL_PAGES.map(n => `
+    <label style="display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-3) var(--sp-4); border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; transition:var(--transition);">
+      <input type="checkbox" checked class="dl-checkbox" data-num="${n}"
+             style="width:18px; height:18px; accent-color:var(--primary); flex-shrink:0;">
+      <div style="flex:1;">
+        <div style="font-weight:700; font-size:var(--text-sm);">Page ${n}</div>
+        <div class="badge ${pagesData[n].has_remarks ? 'badge-orange' : 'badge-green'}" style="margin-top:4px;">
+          ${pagesData[n].has_remarks ? 'Has Remarks' : 'Clean Page'}
+        </div>
+      </div>
+    </label>
+  `).join('');
+  document.getElementById('multi-dl-modal').classList.remove('hidden');
+}
+
+function closeMultiDownloadModal()  { document.getElementById('multi-dl-modal').classList.add('hidden'); }
+function toggleModalSelection(val)  { document.querySelectorAll('.dl-checkbox').forEach(c => c.checked = val); }
+function processCombinedDownload()  {
+  const sel = [...document.querySelectorAll('.dl-checkbox:checked')].map(c => parseInt(c.dataset.num));
+  if (sel.length) { closeMultiDownloadModal(); buildPDF(sel.sort((a,b)=>a-b), 'InspectionReport_Custom.pdf'); }
+  else showNotification('Please select at least one page.', 'info');
+}
+
+function loadImg(url) {
+  return new Promise((res, rej) => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => res(img); img.onerror = rej;
+    img.src = url;
+  });
+}
+
+/* ── Fullscreen modal ── */
+let modalIdx = 0;
+let vt = { scale: .8, x: 0, y: 0 };
+let isPanning = false, startP = { x:0, y:0 };
+
+function openImageModal(src) {
+  modalIdx = currentPagesList.indexOf(currentPage);
+  document.getElementById('imageModal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  loadModalImage(src);
+
+  const vp = document.getElementById('modal-viewport');
+  vp.onwheel = (e) => {
+    e.preventDefault();
+    const r = vp.getBoundingClientRect();
+    const x = e.clientX - r.left - r.width/2;
+    const y = e.clientY - r.top - r.height/2;
+    const delta = e.deltaY > 0 ? .9 : 1.1;
+    const oldS  = vt.scale;
+    vt.scale = Math.max(.1, Math.min(5, vt.scale * delta));
+    const ratio = vt.scale / oldS;
+    vt.x = x - (x - vt.x) * ratio;
+    vt.y = y - (y - vt.y) * ratio;
+    applyVT();
+  };
+  vp.onmousedown = (e) => { isPanning = true; startP = { x: e.clientX - vt.x, y: e.clientY - vt.y }; vp.style.cursor='grabbing'; };
+  window.onmousemove = (e) => { if (isPanning) { vt.x = e.clientX - startP.x; vt.y = e.clientY - startP.y; applyVT(); } };
+  window.onmouseup  = ()  => { isPanning = false; vp.style.cursor='grab'; };
+}
+
+function loadModalImage(src) {
+  const img = document.getElementById('modalImage');
+  img.src = src;
+  img.onload = () => {
+    // Fit vertically
+    const vp = document.getElementById('modal-viewport');
+    const vpH = vp.clientHeight - 40;
+    const vpW = vp.clientWidth - 40;
+    const scaleH = vpH / img.naturalHeight;
+    const scaleW = vpW / img.naturalWidth;
+    
+    vt = { scale: Math.min(scaleH, scaleW, 1), x: 0, y: 0 };
+    applyVT();
+    document.getElementById('modal-counter').textContent = `${modalIdx+1} / ${currentPagesList.length}`;
+    document.getElementById('modal-prev').style.display = modalIdx === 0 ? 'none' : 'flex';
+    document.getElementById('modal-next').style.display = modalIdx === currentPagesList.length-1 ? 'none' : 'flex';
+  };
+}
+
+function applyVT() {
+  document.getElementById('modal-image-wrapper').style.transform = `translate3d(${vt.x}px,${vt.y}px,0) scale(${vt.scale})`;
+  document.getElementById('zoom-indicator').textContent = `${Math.round(vt.scale*100)}%`;
+}
+
+function closeImageModal()    { document.getElementById('imageModal').classList.add('hidden'); document.body.style.overflow=''; }
+function changeViewerZoom(d)  { vt.scale = Math.max(.1, Math.min(5, vt.scale*(1+d))); applyVT(); }
+function resetViewerZoom()    {
+  const img = document.getElementById('modalImage');
+  const vp = document.getElementById('modal-viewport');
+  const scale = Math.min((vp.clientHeight - 40) / img.naturalHeight, (vp.clientWidth - 40) / img.naturalWidth, 1);
+  vt = {scale: scale, x:0,y:0};
+  applyVT(); 
+}
+function navigateModalImage(d) {
+  const next = modalIdx + d;
+  if (next >= 0 && next < currentPagesList.length) {
+    modalIdx = next;
+    const num = currentPagesList[modalIdx];
+    loadModalImage(pagesData[num].image_url);
+    showPage(num);
+  }
+}
+
+/* ── Actions ── */
+function openCanvasEditor() { window.location.href = `/report-editor/{{ file.file_id }}?page=${currentPage}`; }
+
+function deleteFile(id) {
+  if (!confirm('This will permanently delete this report and all its data. This action cannot be undone.\n\nProceed with deletion?')) return;
+  fetch(`/api/file/${id}/delete`, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) {
+        showNotification('Report deleted successfully.', 'success');
+        setTimeout(() => window.location.href = "{{ url_for('dashboard.dashboard') }}", 1000);
+      } else {
+        showNotification('Delete failed: ' + res.message, 'error');
+      }
+    });
+}
+
+/* ── Toast notifications ── */
+function showNotification(msg, type = 'success') {
+  const icons = { success:'fa-check-circle', error:'fa-circle-exclamation', info:'fa-info-circle', warning:'fa-triangle-exclamation' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<i class="fas ${icons[type]||icons.info}" style="flex-shrink:0;"></i><span>${msg}</span>`;
+
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  container.appendChild(el);
+
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(10px)';
+    el.style.transition = 'all .3s';
+    setTimeout(() => el.remove(), 300);
+  }, 3200);
+}
+
+// Keyboard shortcut: Escape closes modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!document.getElementById('imageModal').classList.contains('hidden')) closeImageModal();
+    if (!document.getElementById('multi-dl-modal').classList.contains('hidden')) closeMultiDownloadModal();
+  }
+  if (e.key === 'ArrowLeft' && !document.getElementById('imageModal').classList.contains('hidden')) navigateModalImage(-1);
+  if (e.key === 'ArrowRight'&& !document.getElementById('imageModal').classList.contains('hidden')) navigateModalImage(1);
+});
 </script>
 {% endblock %}

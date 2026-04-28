@@ -1,97 +1,155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Driver Inspection Report Processor{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            200: '#bbf7d0',
-                            300: '#86efac',
-                            400: '#4ade80',
-                            500: '#22c55e',
-                            600: '#0a6f3c',
-                            700: '#15803d',
-                            800: '#166534',
-                            900: '#14532d',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body class="min-h-screen bg-gradient-radial">
-    <!-- Navigation -->
-    <nav class="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/60">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <a href="{{ url_for('dashboard.dashboard') }}" class="flex items-center space-x-3 text-gray-800 hover:text-primary-600 transition-colors group">
-                <div class="w-10 h-10 bg-gradient-to-br from-primary-600 to-primary-700 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-                    <i class="fas fa-file-invoice text-white text-lg"></i>
-                </div>
-                <span class="text-xl font-bold">Inspection Processor</span>
-            </a>
-            <div class="hidden md:flex items-center space-x-8">
-                {% if current_user.is_authenticated %}
-                    <a href="{{ url_for('dashboard.dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard.dashboard' %}active{% endif %}">Dashboard</a>
-                    <a href="{{ url_for('upload_page') }}" class="nav-link {% if request.endpoint == 'upload_page' %}active{% endif %}">Upload</a>
-                    
-                    <div class="flex items-center pl-4 border-l border-gray-200 ml-4 space-x-4">
-                        <div class="text-right hidden lg:block">
-                            <p class="text-xs font-semibold text-gray-900">{{ current_user.name }}</p>
-                            <p class="text-[10px] text-gray-400">{{ current_user.email }}</p>
-                        </div>
-                        <div class="relative group">
-                            <img src="{{ current_user.profile_pic }}" alt="Profile" class="w-10 h-10 rounded-xl border-2 border-primary-50 shadow-sm group-hover:border-primary-400 transition-all">
-                            <div class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                                <div class="px-4 py-2 border-b border-gray-50 mb-1 lg:hidden">
-                                    <p class="text-sm font-semibold text-gray-900">{{ current_user.name }}</p>
-                                    <p class="text-[10px] text-gray-400">{{ current_user.email }}</p>
-                                </div>
-                                <a href="{{ url_for('logout') }}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                {% else %}
-                    <a href="{{ url_for('home') }}" class="nav-link {% if request.endpoint == 'home' %}active{% endif %}">Home</a>
-                    <a href="{{ url_for('login') }}" class="inline-flex items-center px-6 py-2 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 shadow-sm transition-all hover:shadow-md">
-                        Login
-                    </a>
-                {% endif %}
-            </div>
-        </div>
-    </nav>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Driver Inspection Report Processor — AI-powered digitization of handwritten inspection reports.">
+  <title>{% block title %}Inspection Processor{% endblock %}</title>
 
-    <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8">
+  <!-- Preconnect for speed -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- Design System -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <!-- Mobile hamburger -->
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Open navigation">
+    <i class="fas fa-bars" style="font-size:1.1rem; color:var(--text-600);"></i>
+  </button>
+  <!-- Sidebar overlay for mobile -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="app-container">
+
+    <!-- ═══════ SIDEBAR ═══════ -->
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+
+      <!-- Brand -->
+      <a href="{{ url_for('dashboard.dashboard') }}" class="nav-brand">
+        <div class="brand-icon">
+          <i class="fas fa-clipboard-check"></i>
+        </div>
+        <div>
+          <div class="brand-name">InspectAI</div>
+          <div class="brand-tagline">Report Processor</div>
+        </div>
+      </a>
+
+      <!-- Navigation links -->
+      <div class="nav-section-label">Workspace</div>
+      <nav class="nav-links">
+        <div class="nav-item">
+          <a href="{{ url_for('dashboard.dashboard') }}"
+             class="nav-link {% if request.endpoint == 'dashboard.dashboard' %}active{% endif %}">
+            <span class="nav-icon"><i class="fas fa-chart-pie"></i></span>
+            <span>Dashboard</span>
+          </a>
+        </div>
+
+        {% if current_user.is_authenticated %}
+        <div class="nav-item">
+          <a href="{{ url_for('upload_page') }}"
+             class="nav-link {% if request.endpoint == 'upload_page' %}active{% endif %}">
+            <span class="nav-icon"><i class="fas fa-cloud-arrow-up"></i></span>
+            <span>Upload File</span>
+          </a>
+        </div>
+        {% endif %}
+      </nav>
+
+      <!-- Flash messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div style="margin-top: auto; padding-bottom: var(--sp-3);">
+            {% for category, message in messages %}
+              <div style="
+                background: {{ 'var(--success-light)' if category=='success' else 'var(--danger-light)' }};
+                color: {{ 'var(--green-700)' if category=='success' else 'var(--danger)' }};
+                border: 1px solid {{ 'var(--green-200)' if category=='success' else 'rgba(239,68,68,0.2)' }};
+                padding: var(--sp-3) var(--sp-4);
+                border-radius: var(--r-md);
+                font-size: var(--text-xs);
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                gap: var(--sp-2);
+              ">
+                <i class="fas {{ 'fa-check-circle' if category=='success' else 'fa-exclamation-circle' }}"></i>
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <!-- User section -->
+      <div class="sidebar-footer">
+        {% if current_user.is_authenticated %}
+          <div class="user-card">
+            <img src="{{ current_user.profile_pic or 'https://ui-avatars.com/api/?name=' + current_user.name|urlencode + '&background=43a047&color=fff&bold=true&size=80' }}"
+                 alt="Profile photo of {{ current_user.name }}"
+                 class="user-avatar">
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:var(--text-sm); font-weight:700; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {{ current_user.name }}
+              </div>
+              <div style="font-size:var(--text-xs); color:var(--text-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {{ current_user.email }}
+              </div>
+            </div>
+          </div>
+          <a href="{{ url_for('logout') }}" class="btn btn-ghost" style="width:100%; justify-content:flex-start;">
+            <i class="fas fa-arrow-right-from-bracket"></i>
+            Sign out
+          </a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="btn btn-primary" style="width:100%;">
+            <i class="fas fa-sign-in-alt"></i>
+            Sign In
+          </a>
+        {% endif %}
+      </div>
+    </aside>
+
+    <!-- ═══════ MAIN ═══════ -->
+    <main class="main-wrapper">
+      <div class="main-content">
         {% block content %}{% endblock %}
+      </div>
+
+      <footer class="app-footer">
+        <span>&copy; 2025 InspectAI — Driver Inspection Report Processor</span>
+        <span style="display:flex; align-items:center; gap:var(--sp-2);">
+          <i class="fas fa-shield-halved" style="color:var(--primary);"></i>
+          Enterprise-grade security
+        </span>
+      </footer>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white/60 backdrop-blur-sm border-t border-gray-200/60 mt-16 py-8">
-        <div class="container mx-auto px-4 text-center text-gray-600">
-            <div class="flex items-center justify-center space-x-2 mb-2">
-                <div class="w-6 h-6 bg-gradient-to-br from-primary-600 to-primary-700 rounded flex items-center justify-center">
-                    <i class="fas fa-file-invoice text-white text-xs"></i>
-                </div>
-                <span class="font-semibold">Inspection Processor</span>
-            </div>
-            <p class="text-sm">&copy; 2025 Driver Inspection Report Processor. All rights reserved.</p>
-        </div>
-    </footer>
+  </div><!-- /.app-container -->
 
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-    {% block scripts %}{% endblock %}
+  <!-- Scripts -->
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script>
+    // Mobile sidebar toggle
+    const sidebar    = document.getElementById('sidebar');
+    const overlay    = document.getElementById('sidebar-overlay');
+    const toggleBtn  = document.getElementById('sidebar-toggle');
+
+    function openSidebar()  { sidebar.classList.add('open'); overlay.classList.add('visible'); }
+    function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('visible'); }
+
+    toggleBtn.addEventListener('click', openSidebar);
+    overlay.addEventListener('click', closeSidebar);
+  </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

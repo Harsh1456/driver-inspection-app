@@ -1,90 +1,192 @@
 {% extends "base.html" %}
+{% block title %}Sign In — InspectAI{% endblock %}
 
-{% block title %}Login - Inspection Processor{% endblock %}
+{% block extra_css %}
+<style>
+/* Auth page: full-height, no sidebar interaction */
+.auth-outer {
+  display: flex;
+  align-items: stretch;
+  min-height: calc(100vh - 100px);
+  gap: 0;
+  border-radius: var(--r-2xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+}
+
+/* Left brand panel */
+.auth-brand-panel {
+  width: 44%;
+  background: linear-gradient(160deg, var(--green-700) 0%, var(--green-500) 100%);
+  padding: var(--sp-12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: white;
+}
+
+/* Right form panel */
+.auth-form-panel {
+  flex: 1;
+  background: var(--white);
+  padding: var(--sp-12) var(--sp-10);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin: var(--sp-5) 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.or-divider::before, .or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+@media(max-width:767px) {
+  .auth-brand-panel { display: none; }
+  .auth-outer { border-radius: var(--r-xl); }
+  .auth-form-panel { padding: var(--sp-8) var(--sp-6); }
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="flex flex-col items-center justify-center min-h-[70vh]">
-    <div class="w-full max-w-md">
-        <div class="bg-white/70 backdrop-blur-xl p-10 rounded-3xl shadow-2xl border border-white/40 transform transition-all hover:scale-[1.01]">
-            <div class="text-center mb-10">
-                <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary-600 to-primary-800 rounded-3xl shadow-lg mb-6 ring-4 ring-primary-100/50">
-                    <i class="fas fa-file-invoice text-white text-3xl"></i>
-                </div>
-                <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight mb-3">Welcome Back</h1>
-                <p class="text-gray-500 font-medium">Log in to manage your driver inspection reports</p>
-            </div>
+<div class="animate-fade" style="display:flex; align-items:center; justify-content:center; padding: 2rem 0;">
+  <div class="auth-outer" style="width:100%; max-width:900px;">
 
-            <form action="{{ url_for('login') }}" method="POST" class="space-y-5">
-                <div>
-                    <label for="email" class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">Email Address</label>
-                    <input type="email" name="email" id="email" required placeholder="name@company.com"
-                        class="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all font-medium text-sm">
-                </div>
-                <div>
-                    <div class="flex items-center justify-between mb-2 ml-1">
-                        <label for="password" class="block text-xs font-bold text-gray-400 uppercase tracking-widest">Password</label>
-                        <a href="#" class="text-[10px] font-bold text-primary-600 hover:text-primary-700 uppercase tracking-wider">Forgot?</a>
-                    </div>
-                    <input type="password" name="password" id="password" required placeholder="••••••••"
-                        class="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all font-medium text-sm">
-                </div>
-                
-                <div class="flex items-center ml-1">
-                    <input type="checkbox" name="remember" id="remember" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer">
-                    <label for="remember" class="ml-2 text-xs font-medium text-gray-500 cursor-pointer">Remember me</label>
-                </div>
-
-                <button type="submit" class="w-full py-4 bg-primary-600 text-white rounded-2xl font-bold text-sm shadow-xl shadow-primary-200 hover:bg-primary-700 hover:-translate-y-0.5 transition-all active:translate-y-0">
-                    Sign In
-                </button>
-            </form>
-
-            <div class="relative my-10">
-                <div class="absolute inset-0 flex items-center">
-                    <div class="w-full border-t border-gray-100"></div>
-                </div>
-                <div class="relative flex justify-center text-xs uppercase tracking-[0.2em] font-black">
-                    <span class="bg-white px-4 text-gray-300">Or continue with</span>
-                </div>
-            </div>
-
-            <div class="space-y-4">
-                <a href="{{ url_for('login_microsoft') }}" class="group relative flex items-center justify-center w-full py-4 px-6 bg-white border border-gray-200 rounded-2xl font-bold text-sm text-gray-700 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-blue-50/10 transition-all duration-300">
-                    <div class="absolute left-6">
-                        <svg class="w-5 h-5" viewBox="0 0 21 21">
-                            <rect x="0" y="0" width="10" height="10" fill="#f25022"/>
-                            <rect x="11" y="0" width="10" height="10" fill="#7fbb00"/>
-                            <rect x="0" y="11" width="10" height="10" fill="#00a1f1"/>
-                            <rect x="11" y="11" width="10" height="10" fill="#ffbb00"/>
-                        </svg>
-                    </div>
-                    <span>Microsoft Account</span>
-                    <i class="fas fa-arrow-right ml-3 text-xs opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300"></i>
-                </a>
-            </div>
-
-            <div class="mt-8 text-center">
-                <p class="text-sm text-gray-500">
-                    Don't have an account? 
-                    <a href="{{ url_for('register') }}" class="text-primary-600 font-bold hover:text-primary-700 transition-colors">Create one now</a>
-                </p>
-            </div>
-
-
-            <div class="mt-12 text-center border-t border-gray-100 pt-8">
-                <p class="text-sm text-gray-400">
-                    Secure authentication powered by Microsoft OAuth 2.0
-                </p>
-            </div>
+    <!-- Left brand panel -->
+    <div class="auth-brand-panel">
+      <div>
+        <div style="display:flex; align-items:center; gap:var(--sp-3); margin-bottom:var(--sp-10);">
+          <div style="width:44px; height:44px; background:rgba(255,255,255,0.2); border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; font-size:1.25rem; backdrop-filter:blur(10px);">
+            <i class="fas fa-clipboard-check"></i>
+          </div>
+          <span style="font-family:'Sora',sans-serif; font-size:1.25rem; font-weight:800; letter-spacing:-0.02em;">InspectAI</span>
         </div>
-        
-        <div class="mt-8 flex justify-center space-x-6 text-sm text-gray-400 font-medium">
-            <a href="#" class="hover:text-primary-600 transition-colors">Privacy Policy</a>
-            <span class="text-gray-200 opacity-50">|</span>
-            <a href="#" class="hover:text-primary-600 transition-colors">Terms of Service</a>
-            <span class="text-gray-200 opacity-50">|</span>
-            <a href="#" class="hover:text-primary-600 transition-colors">Help Center</a>
+        <h2 style="font-size:1.875rem; font-weight:800; line-height:1.2; margin-bottom:var(--sp-4);">
+          Your reports, digitized. Your data, secured.
+        </h2>
+        <p style="color:rgba(255,255,255,0.8); font-size:var(--text-sm); line-height:1.7;">
+          AI-powered extraction turns handwritten inspection forms into structured, searchable data — instantly.
+        </p>
+      </div>
+
+      <!-- Testimonial -->
+      <div style="background:rgba(255,255,255,0.12); border-radius:var(--r-lg); padding:var(--sp-5); backdrop-filter:blur(10px);">
+        <div style="display:flex; gap:var(--sp-1); margin-bottom:var(--sp-3);">
+          {% for _ in range(5) %}
+          <i class="fas fa-star" style="color:#fbbf24; font-size:0.75rem;"></i>
+          {% endfor %}
         </div>
+        <p style="color:white; font-size:var(--text-sm); line-height:1.6; font-style:italic; margin-bottom:var(--sp-3);">
+          "Reduced our data entry time by 85%. The AI catches remarks we used to miss on paper reviews."
+        </p>
+        <div style="font-size:var(--text-xs); color:rgba(255,255,255,0.65); font-weight:700;">
+          — Fleet Operations Manager, Pacific Transport
+        </div>
+      </div>
     </div>
+
+    <!-- Right form panel -->
+    <div class="auth-form-panel">
+      <div style="max-width:360px; margin:0 auto; width:100%;">
+
+        <div style="margin-bottom:var(--sp-8);">
+          <h1 style="font-size:var(--text-2xl); margin-bottom:var(--sp-2);">Welcome back</h1>
+          <p style="color:var(--text-muted); font-size:var(--text-sm);">Sign in to access your inspection dashboard.</p>
+        </div>
+
+        <form action="{{ url_for('login') }}" method="POST" novalidate>
+          <div class="form-group">
+            <label class="label" for="email">
+              <i class="fas fa-envelope" style="margin-right:var(--sp-2); color:var(--primary);"></i>
+              Email Address
+            </label>
+            <input type="email" id="email" name="email" class="input"
+                   placeholder="name@company.com" autocomplete="email" required>
+          </div>
+
+          <div class="form-group">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-2);">
+              <label class="label" for="password" style="margin-bottom:0;">
+                <i class="fas fa-lock" style="margin-right:var(--sp-2); color:var(--primary);"></i>
+                Password
+              </label>
+              <a href="#" style="font-size:var(--text-xs); color:var(--primary); font-weight:700;">
+                Forgot password?
+              </a>
+            </div>
+            <div style="position:relative;">
+              <input type="password" id="password" name="password" class="input"
+                     placeholder="Enter your password" autocomplete="current-password" required
+                     style="padding-right:3rem;">
+              <button type="button" id="toggle-pw"
+                style="position:absolute; right:var(--sp-3); top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-faint); padding:var(--sp-1);"
+                onclick="togglePassword()" aria-label="Show/hide password">
+                <i class="fas fa-eye" id="pw-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="display:flex; align-items:center; gap:var(--sp-3);">
+            <input type="checkbox" name="remember" id="remember"
+                   style="width:18px; height:18px; border-radius:4px; cursor:pointer; accent-color:var(--primary);">
+            <label for="remember" style="font-size:var(--text-sm); color:var(--text-muted); cursor:pointer; font-weight:500;">
+              Keep me signed in for 30 days
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%; padding:0.875rem; font-size:var(--text-base); margin-top:var(--sp-2);">
+            <i class="fas fa-arrow-right-to-bracket"></i>
+            Sign In
+          </button>
+        </form>
+
+        <div class="or-divider">or continue with</div>
+
+        <a href="{{ url_for('login_microsoft') }}"
+           class="btn btn-secondary"
+           style="width:100%; padding:0.875rem; font-size:var(--text-sm);">
+          <svg width="20" height="20" viewBox="0 0 21 21" aria-hidden="true">
+            <rect x="0" y="0" width="10" height="10" fill="#f25022"/>
+            <rect x="11" y="0" width="10" height="10" fill="#7fbb00"/>
+            <rect x="0" y="11" width="10" height="10" fill="#00a1f1"/>
+            <rect x="11" y="11" width="10" height="10" fill="#ffbb00"/>
+          </svg>
+          Continue with Microsoft
+        </a>
+
+        <p style="text-align:center; margin-top:var(--sp-6); font-size:var(--text-sm); color:var(--text-muted);">
+          Don't have an account?
+          <a href="{{ url_for('register') }}" style="color:var(--primary); font-weight:700; margin-left:4px;">Create account</a>
+        </p>
+      </div>
+    </div>
+
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePassword() {
+  const pw  = document.getElementById('password');
+  const eye = document.getElementById('pw-eye');
+  const isHidden = pw.type === 'password';
+  pw.type = isHidden ? 'text' : 'password';
+  eye.className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
+}
+</script>
 {% endblock %}

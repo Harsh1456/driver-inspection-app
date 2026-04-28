@@ -1,55 +1,208 @@
 {% extends "base.html" %}
+{% block title %}Create Account — InspectAI{% endblock %}
 
-{% block title %}Create Account - Inspection Processor{% endblock %}
+{% block extra_css %}
+<style>
+.auth-outer {
+  display: flex;
+  align-items: stretch;
+  min-height: calc(100vh - 100px);
+  border-radius: var(--r-2xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+}
+.auth-brand-panel {
+  width: 40%;
+  background: linear-gradient(160deg, var(--green-700) 0%, var(--green-500) 100%);
+  padding: var(--sp-12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: white;
+}
+.auth-form-panel {
+  flex: 1;
+  background: var(--white);
+  padding: var(--sp-10) var(--sp-10);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.pw-strength-bar {
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--border);
+  overflow: hidden;
+  margin-top: var(--sp-2);
+}
+.pw-strength-fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  width: 0%;
+  transition: width 0.3s var(--ease), background 0.3s;
+}
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+}
+@media(max-width:767px) {
+  .auth-brand-panel { display: none; }
+  .auth-form-panel { padding: var(--sp-8) var(--sp-5); }
+  .auth-outer { border-radius: var(--r-xl); }
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="flex flex-col items-center justify-center min-h-[70vh]">
-    <div class="w-full max-w-md">
-        <div class="bg-white/70 backdrop-blur-xl p-10 rounded-3xl shadow-2xl border border-white/40 transform transition-all hover:scale-[1.01]">
-            <div class="text-center mb-10">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl shadow-lg mb-6 ring-4 ring-primary-100/50">
-                    <i class="fas fa-user-plus text-white text-2xl"></i>
-                </div>
-                <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight mb-3">Create Account</h1>
-                <p class="text-gray-500 font-medium">Join us to start managing your reports</p>
-            </div>
+<div class="animate-fade" style="display:flex; align-items:center; justify-content:center; padding: 2rem 0;">
+  <div class="auth-outer" style="width:100%; max-width:920px;">
 
-            <form action="{{ url_for('register') }}" method="POST" class="space-y-5">
-                <div>
-                    <label for="name" class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">Full Name</label>
-                    <input type="text" name="name" id="name" required placeholder="John Doe"
-                        class="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all font-medium text-sm">
-                </div>
-                <div>
-                    <label for="email" class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">Email Address</label>
-                    <input type="email" name="email" id="email" required placeholder="name@company.com"
-                        class="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all font-medium text-sm">
-                </div>
-                <div>
-                    <label for="password" class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">Password</label>
-                    <input type="password" name="password" id="password" required placeholder="Min. 8 characters"
-                        class="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all font-medium text-sm">
-                </div>
-                
-                <div class="flex items-start space-x-3 ml-1 py-2">
-                    <input type="checkbox" id="terms" required class="mt-1 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer">
-                    <label for="terms" class="text-xs text-gray-500 leading-relaxed cursor-pointer">
-                        I agree to the <a href="#" class="text-primary-600 font-bold hover:underline">Terms of Service</a> and <a href="#" class="text-primary-600 font-bold hover:underline">Privacy Policy</a>.
-                    </label>
-                </div>
-
-                <button type="submit" class="w-full py-4 bg-primary-600 text-white rounded-2xl font-bold text-sm shadow-xl shadow-primary-200 hover:bg-primary-700 hover:-translate-y-0.5 transition-all active:translate-y-0">
-                    Create My Account
-                </button>
-            </form>
-
-            <div class="mt-8 text-center pt-8 border-t border-gray-100">
-                <p class="text-sm text-gray-500">
-                    Already have an account? 
-                    <a href="{{ url_for('login') }}" class="text-primary-600 font-bold hover:text-primary-700 transition-colors">Sign in here</a>
-                </p>
-            </div>
+    <!-- Left panel -->
+    <div class="auth-brand-panel">
+      <div>
+        <div style="display:flex; align-items:center; gap:var(--sp-3); margin-bottom:var(--sp-10);">
+          <div style="width:44px; height:44px; background:rgba(255,255,255,0.2); border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; font-size:1.25rem;">
+            <i class="fas fa-clipboard-check"></i>
+          </div>
+          <span style="font-family:'Sora',sans-serif; font-size:1.25rem; font-weight:800;">InspectAI</span>
         </div>
+        <h2 style="font-size:1.75rem; font-weight:800; line-height:1.2; margin-bottom:var(--sp-5);">
+          Join teams that trust AI for inspection accuracy.
+        </h2>
+      </div>
+
+      <div>
+        <div style="font-size:var(--text-xs); font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:rgba(255,255,255,0.6); margin-bottom:var(--sp-4);">What you get</div>
+        {% for icon, text in [
+          ('fa-bolt', 'Under 2s AI processing per report'),
+          ('fa-lock', 'Secure, encrypted data storage'),
+          ('fa-file-pdf', 'PDF & Excel export with signatures'),
+          ('fa-chart-bar', 'Criticality scoring at a glance'),
+        ] %}
+        <div class="benefit-item">
+          <div style="width:32px; height:32px; background:rgba(255,255,255,0.15); border-radius:var(--r-sm); display:flex; align-items:center; justify-content:center; font-size:0.8rem; flex-shrink:0;">
+            <i class="fas {{ icon }}"></i>
+          </div>
+          <span style="font-size:var(--text-sm); color:rgba(255,255,255,0.9);">{{ text }}</span>
+        </div>
+        {% endfor %}
+      </div>
     </div>
+
+    <!-- Right form panel -->
+    <div class="auth-form-panel">
+      <div style="max-width:380px; margin:0 auto; width:100%;">
+
+        <div style="margin-bottom:var(--sp-8);">
+          <h1 style="font-size:var(--text-2xl); margin-bottom:var(--sp-2);">Create your account</h1>
+          <p style="color:var(--text-muted); font-size:var(--text-sm);">Get started — it takes less than 2 minutes.</p>
+        </div>
+
+        <form action="{{ url_for('register') }}" method="POST" novalidate>
+
+          <div class="form-group">
+            <label class="label" for="name">
+              <i class="fas fa-user" style="margin-right:var(--sp-2); color:var(--primary);"></i>
+              Full Name
+            </label>
+            <input type="text" id="name" name="name" class="input"
+                   placeholder="Your full name" autocomplete="name" required>
+          </div>
+
+          <div class="form-group">
+            <label class="label" for="email">
+              <i class="fas fa-envelope" style="margin-right:var(--sp-2); color:var(--primary);"></i>
+              Work Email Address
+            </label>
+            <input type="email" id="email" name="email" class="input"
+                   placeholder="name@company.com" autocomplete="email" required>
+          </div>
+
+          <div class="form-group">
+            <label class="label" for="password">
+              <i class="fas fa-lock" style="margin-right:var(--sp-2); color:var(--primary);"></i>
+              Password
+              <span class="label-hint">— at least 8 characters</span>
+            </label>
+            <div style="position:relative;">
+              <input type="password" id="password" name="password" class="input"
+                     placeholder="Create a strong password" autocomplete="new-password" required
+                     style="padding-right:3rem;" oninput="updateStrength(this.value)">
+              <button type="button" onclick="toggleRegPw()"
+                style="position:absolute; right:var(--sp-3); top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-faint);"
+                aria-label="Show/hide password">
+                <i class="fas fa-eye" id="reg-pw-eye"></i>
+              </button>
+            </div>
+            <!-- Password strength -->
+            <div class="pw-strength-bar">
+              <div class="pw-strength-fill" id="pw-strength-fill"></div>
+            </div>
+            <div id="pw-strength-label" style="font-size:var(--text-xs); color:var(--text-faint); margin-top:var(--sp-1); font-weight:600;"></div>
+          </div>
+
+          <div class="form-group" style="display:flex; align-items:flex-start; gap:var(--sp-3);">
+            <input type="checkbox" id="terms" required
+                   style="width:18px; height:18px; margin-top:2px; cursor:pointer; accent-color:var(--primary); flex-shrink:0;">
+            <label for="terms" style="font-size:var(--text-sm); color:var(--text-muted); cursor:pointer; line-height:1.5;">
+              I agree to the
+              <a href="#" style="color:var(--primary); font-weight:700;">Terms of Service</a>
+              and
+              <a href="#" style="color:var(--primary); font-weight:700;">Privacy Policy</a>.
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%; padding:0.875rem; font-size:var(--text-base);">
+            <i class="fas fa-user-plus"></i>
+            Create Account
+          </button>
+        </form>
+
+        <p style="text-align:center; margin-top:var(--sp-6); font-size:var(--text-sm); color:var(--text-muted);">
+          Already have an account?
+          <a href="{{ url_for('login') }}" style="color:var(--primary); font-weight:700; margin-left:4px;">Sign in</a>
+        </p>
+      </div>
+    </div>
+
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleRegPw() {
+  const pw  = document.getElementById('password');
+  const eye = document.getElementById('reg-pw-eye');
+  const isHidden = pw.type === 'password';
+  pw.type = isHidden ? 'text' : 'password';
+  eye.className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
+}
+
+function updateStrength(val) {
+  const fill  = document.getElementById('pw-strength-fill');
+  const label = document.getElementById('pw-strength-label');
+  let score = 0;
+  if (val.length >= 8)  score++;
+  if (/[A-Z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^A-Za-z0-9]/.test(val)) score++;
+
+  const levels = [
+    { color:'#ef4444', text:'Too weak', pct:'20%' },
+    { color:'#f59e0b', text:'Weak',     pct:'40%' },
+    { color:'#f59e0b', text:'Fair',     pct:'60%' },
+    { color:'#43a047', text:'Strong',   pct:'85%' },
+    { color:'#2e7d32', text:'Very strong', pct:'100%' },
+  ];
+  const level = levels[Math.min(score, 4)];
+  fill.style.width = val ? level.pct : '0%';
+  fill.style.background = level.color;
+  label.textContent = val ? level.text : '';
+  label.style.color = level.color;
+}
+</script>
 {% endblock %}

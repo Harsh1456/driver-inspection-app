@@ -1,1139 +1,636 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Report Editor - {{ file.file_name }}</title>
-    <!-- Tailwind for layout -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts: Premium Cursive Selection -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Dancing+Script:wght@600&family=Alex+Brush&family=Great+Vibes&display=swap"
-        rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Fabric.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    <!-- jsPDF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Signature Pad -->
-    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor — {{ file.file_name }} | InspectAI</title>
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
-        :root {
-            --formal-blue: #2563eb;
-            --formal-bg: #f8fafc;
-            --formal-border: #e2e8f0;
-            --formal-text: #1e293b;
-        }
+  <!-- 3rd party libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Alex+Brush&family=Great+Vibes&display=swap" rel="stylesheet">
 
-        body {
-            font-family: 'Inter', sans-serif;
-            color: var(--formal-text);
-            background-color: var(--formal-bg);
-        }
+  <style>
+    html, body { height: 100%; overflow: hidden; background: #e0e5ec; }
+    body { display: flex; flex-direction: column; font-family: 'Manrope', sans-serif; }
 
-        .step-card {
-            @apply bg-white border border-gray-100 rounded-2xl p-6 mb-4 transition-all duration-300;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        }
+    /* ── Header ── */
+    .editor-header {
+      height: 60px;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0 var(--sp-4);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 100;
+      flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+    .header-right { display: flex; align-items: center; gap: var(--sp-2); }
+    
+    @media(max-width: 640px) {
+      .brand-meta { display: none; }
+      .editor-header { height: 50px; padding: 0 var(--sp-2); }
+    }
 
-        .step-card.active {
-            @apply ring-2 ring-blue-500 ring-offset-2;
-        }
+    /* ── Canvas Viewport ── */
+    .viewport {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: auto;
+      padding: var(--sp-6);
+      position: relative;
+    }
+    #canvas-wrapper {
+      background: white;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+      border-radius: 2px;
+      position: relative;
+    }
 
-        .step-number {
-            @apply w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold mb-4;
-        }
+    /* ── Floating Nav Menu (The "Dock") ── */
+    .editor-dock-container {
+      position: fixed;
+      bottom: var(--sp-6);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: auto;
+      max-width: calc(100% - 2rem);
+    }
+    
+    /* Tray / Popover */
+    .dock-tray {
+      width: 340px;
+      background: var(--white);
+      border-radius: var(--r-xl);
+      box-shadow: var(--shadow-xl);
+      border: 1px solid var(--border);
+      margin-bottom: var(--sp-3);
+      padding: var(--sp-5);
+      display: none;
+      animation: slideUpFade 0.25s var(--ease);
+    }
+    .dock-tray.active { display: block; }
+    
+    /* The Dock Bar itself */
+    .dock-bar {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(12px) saturate(180%);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: var(--r-full);
+      padding: 6px;
+      display: flex;
+      gap: 6px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+    
+    .dock-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-600);
+      transition: var(--transition);
+      position: relative;
+    }
+    .dock-btn i { font-size: 1.1rem; }
+    .dock-btn span { font-size: 0.6rem; font-weight: 800; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.02em; }
+    
+    .dock-btn:hover { background: rgba(0,0,0,0.05); color: var(--primary); }
+    .dock-btn.active {
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-green);
+    }
 
-        .tool-button {
-            @apply flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-gray-600 hover:text-blue-600;
-        }
+    /* ── Floating Controls ── */
+    .zoom-ctrl {
+      position: fixed;
+      bottom: var(--sp-6);
+      right: var(--sp-6);
+      background: var(--white);
+      border-radius: var(--r-full);
+      box-shadow: var(--shadow-lg);
+      padding: 4px;
+      display: flex;
+      gap: 2px;
+      z-index: 100;
+      border: 1px solid var(--border);
+    }
+    @media(max-width:768px) { .zoom-ctrl { display: none; } }
 
-        .tool-button.active {
-            @apply bg-blue-600 border-blue-600 text-white hover:bg-blue-700;
-        }
+    /* ── Shared Tray Styles ── */
+    .tray-title { font-family: 'Sora', sans-serif; font-weight: 800; font-size: var(--text-sm); margin-bottom: var(--sp-4); display: flex; align-items:center; gap:var(--sp-2); }
+    
+    .tool-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+    .tool-btn-small {
+      padding: 10px 4px;
+      background: var(--surface-alt);
+      border: 1.5px solid transparent;
+      border-radius: var(--r-md);
+      display: flex;
+      flex-direction: column;
+      align-items:center;
+      gap: 4px;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .tool-btn-small i { color: var(--text-600); font-size: 1rem; }
+    .tool-btn-small span { font-size: 0.6rem; font-weight: 800; color: var(--text-faint); text-transform: uppercase; }
+    .tool-btn-small:hover { border-color: var(--primary); }
+    .tool-btn-small.active { border-color: var(--primary); background: var(--green-50); }
+    .tool-btn-small.active i { color: var(--primary); }
 
-        #canvas-wrapper {
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            background-color: white;
-        }
+    /* Transitions */
+    @keyframes slideUpFade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .hidden { display: none !important; }
+    
+    /* Modals */
+    .modal-sheet {
+       position: fixed; inset:0; background:rgba(0,0,0,0.4); backdrop-filter:blur(10px); z-index:2000;
+       display:flex; align-items:center; justify-content:center; padding:1rem;
+    }
+    .sig-canvas-wrap { border: 2px dashed var(--border-2); border-radius: var(--r-lg); background: #fdfdfd; cursor: crosshair; }
 
-        /* Step guidance transition */
-        .step-content { transition: all 0.3s ease-in-out; }
-    </style>
+    /* Nav labels */
+    .nav-label-pill {
+      background: var(--surface-alt); padding: 0.25rem 0.75rem; border-radius: var(--r-full);
+      font-size: var(--text-xs); font-family: 'Sora', sans-serif; font-weight: 800; color: var(--primary);
+      border: 1px solid var(--border);
+    }
+
+    /* Signature Tabs */
+    .sig-tabs { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+    .sig-tab { flex: 1; text-align: center; padding: var(--sp-2); border-bottom: 2px solid var(--border); font-size: var(--text-sm); font-weight: 700; color: var(--text-muted); cursor: pointer; transition:var(--transition); }
+    .sig-tab:hover { color: var(--primary); }
+    .sig-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--green-50); border-radius: var(--r-md) var(--r-md) 0 0; }
+    .sig-pane { display: none; }
+    .sig-pane.active { display: block; }
+    
+    .font-preview { font-size: 24px; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md); cursor: pointer; text-align: center; margin-bottom: var(--sp-2); transition:var(--transition); }
+    .font-preview:hover, .font-preview.selected { border-color: var(--primary); background: var(--green-50); }
+    
+    .flex-center { display: flex; align-items: center; justify-content: center; }
+  </style>
 </head>
+<body>
 
-<body class="h-screen flex flex-col overflow-hidden">
+<header class="editor-header">
+  <div class="header-left">
+    <a href="/file/{{ file.file_id }}" class="btn btn-ghost btn-sm" style="width:36px; height:36px; padding:0; border-radius:50%;">
+      <i class="fas fa-close"></i>
+    </a>
+    <div class="brand-meta">
+      <div style="font-weight:800; font-size:var(--text-sm); line-height:1;">{{ file.file_name }}</div>
+      <div style="font-size:10px; color:var(--text-faint); margin-top:2px; font-weight:600;">ACTIVE EDITOR</div>
+    </div>
+  </div>
 
-    <!-- Global Header -->
-    <header class="h-16 bg-white border-b border-gray-200 px-8 flex items-center justify-between z-30">
-        <div class="flex items-center space-x-4">
-            <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-                <i class="fas fa-file-signature text-lg"></i>
-            </div>
-            <div>
-                <h1 class="text-lg font-bold text-slate-900 leading-none">Report Editor</h1>
-                <p class="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-1">{{ file.file_name }}</p>
-            </div>
-        </div>
+  <div class="header-right">
+    <div style="display:flex; align-items:center; gap:var(--sp-1); background:var(--surface-alt); padding:4px; border-radius:var(--r-full); border:1px solid var(--border);">
+      <button onclick="navigate(-1)" id="btn-prev" class="btn btn-ghost btn-sm" style="width:28px; height:28px; padding:0;"><i class="fas fa-chevron-left"></i></button>
+      <span id="page-counter" style="font-size:12px; font-weight:800; padding:0 8px; font-family:'Sora',sans-serif; color:var(--primary); white-space:nowrap;">Pg. 1</span>
+      <button onclick="navigate(1)"  id="btn-next" class="btn btn-ghost btn-sm" style="width:28px; height:28px; padding:0;"><i class="fas fa-chevron-right"></i></button>
+    </div>
+    <button onclick="saveReport()" id="btn-save" class="btn btn-primary btn-sm" style="margin-left:var(--sp-2)">
+      <i class="fas fa-floppy-disk"></i> <span class="brand-meta">Save</span>
+    </button>
+  </div>
+</header>
 
-        <div class="flex items-center space-x-4">
-            <div class="flex items-center bg-slate-100 rounded-lg p-1 mr-4">
-                <button onclick="navigate(-1)" id="btn-prev" class="p-2 hover:bg-white rounded-md transition-all disabled:opacity-30">
-                    <i class="fas fa-chevron-left text-xs"></i>
-                </button>
-                <span id="page-counter" class="px-4 text-[11px] font-bold text-slate-600 uppercase tracking-tight">Loading...</span>
-                <button onclick="navigate(1)" id="btn-next" class="p-2 hover:bg-white rounded-md transition-all disabled:opacity-30">
-                    <i class="fas fa-chevron-right text-xs"></i>
-                </button>
-            </div>
-            
-            <button onclick="handleBack()" class="px-4 py-2 text-slate-500 hover:text-slate-800 text-sm font-semibold transition-all">
-                Exit
-            </button>
-            <button onclick="saveReport()" id="btn-save" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-100 flex items-center">
-                <i class="fas fa-save mr-2"></i> Save Changes
-            </button>
-        </div>
-    </header>
+<main class="viewport" id="canvas-container">
+  <div id="canvas-wrapper">
+    <canvas id="report-canvas"></canvas>
+    <div id="loader" class="flex-center" style="position:absolute; inset:0; background:white; z-index:10;">
+       <i class="fas fa-circle-notch fa-spin" style="font-size:2rem; color:var(--primary);"></i>
+    </div>
+  </div>
+</main>
 
-    <main class="flex-1 flex overflow-hidden">
-        <!-- Sidebar: Guided Wizard -->
-        <aside class="w-[420px] bg-white border-r border-gray-200 flex flex-col z-20 shadow-xl shadow-slate-200/50">
-            <!-- Guidance Section -->
-            <div class="p-6 bg-slate-50 border-b border-gray-100">
-                <div class="flex items-start space-x-3">
-                    <div class="mt-1 text-blue-600"><i class="fas fa-info-circle"></i></div>
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-800">How to use this editor</h3>
-                        <p class="text-xs text-slate-500 mt-1 leading-relaxed">
-                            Follow the steps below to professionalize your report. Your changes are reflected instantly in the preview on the right.
-                        </p>
-                    </div>
-                </div>
-            </div>
+<!-- ── Floating Dock ── -->
+<div class="editor-dock-container">
+  
+  <!-- Trays -->
+  <div id="tray-title" class="dock-tray">
+    <div class="tray-title"><i class="fas fa-heading"></i>Add Page Header</div>
+    <div class="form-group" style="margin-bottom:12px;">
+       <input type="text" id="title-input" class="input" placeholder="e.g. Daily Inspection Report">
+    </div>
+    <button onclick="placeTitle()" class="btn btn-primary btn-sm" style="width:100%; border-radius:var(--r-md);">
+       <i class="fas fa-plus"></i> Place Title
+    </button>
+  </div>
 
-            <!-- Steps Container -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
-                
-                <!-- Step 1: Add Title -->
-                <div class="step-card" id="step-1">
-                    <div class="step-number">1</div>
-                    <h3 class="text-sm font-bold text-slate-800 mb-1">Add Title</h3>
-                    <p class="text-[11px] text-slate-500 mb-4">Enter the title of your report to be placed at the top.</p>
-                    <div class="space-y-3">
-                        <input type="text" id="report-title-input" placeholder="e.g., Annual Safety Inspection" 
-                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium">
-                        <button onclick="placeTitle()" class="w-full py-2.5 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all">
-                            Place Title on Report
-                        </button>
-                    </div>
-                </div>
+  <div id="tray-remarks" class="dock-tray">
+    <div class="tray-title"><i class="fas fa-quote-left"></i>Observations</div>
+    <div class="form-group" style="margin-bottom:12px;">
+       <textarea id="remarks-input" class="input" rows="3" placeholder="Write out specific observations…"></textarea>
+    </div>
+    <button onclick="placeContent()" class="btn btn-primary btn-sm" style="width:100%; border-radius:var(--r-md);">
+       <i class="fas fa-plus"></i> Place Text
+    </button>
+  </div>
 
-                <!-- Step 2: Write Content -->
-                <div class="step-card" id="step-2">
-                    <div class="step-number">2</div>
-                    <h3 class="text-sm font-bold text-slate-800 mb-1">Write Content</h3>
-                    <p class="text-[11px] text-slate-500 mb-4">Write your report content here in a clear and simple way.</p>
-                    <textarea id="report-content-input" rows="4" placeholder="Type your observations or remarks here..."
-                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium resize-none"></textarea>
-                    <button onclick="placeContent()" class="w-full mt-3 py-2.5 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all">
-                        Add to Report
-                    </button>
-                </div>
+  <div id="tray-format" class="dock-tray">
+    <div class="tray-title"><i class="fas fa-sliders"></i>Styling & Ticks</div>
+    <div class="tool-grid">
+       <div onclick="toggleBold()" class="tool-btn-small"><i class="fas fa-bold"></i><span>Bold</span></div>
+       <div onclick="toggleItalic()" class="tool-btn-small"><i class="fas fa-italic"></i><span>Italic</span></div>
+       <div onclick="setTool('tick-green')" id="tool-tick" class="tool-btn-small"><i class="fas fa-check" style="color:var(--primary);"></i><span>Tick</span></div>
+       <div onclick="deleteSelected()" class="tool-btn-small" style="background:var(--danger-light);"><i class="fas fa-trash-alt" style="color:var(--danger);"></i><span style="color:var(--danger);">Delete</span></div>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; background:var(--surface-alt); padding:8px 12px; border-radius:var(--r-md);">
+       <span style="font-size:11px; font-weight:800; color:var(--text-faint);">SIZE</span>
+       <div style="display:flex; align-items:center; gap:8px;">
+          <button onclick="adjustFontSize(-2)" class="btn btn-ghost btn-sm" style="width:24px; height:24px; padding:0;">-</button>
+          <span id="font-size-val" style="font-weight:900; font-size:13px; min-width:20px; text-align:center;">22</span>
+          <button onclick="adjustFontSize(2)" class="btn btn-ghost btn-sm" style="width:24px; height:24px; padding:0;">+</button>
+       </div>
+    </div>
+  </div>
 
-                <!-- Step 3: Format & Tools -->
-                <div class="step-card" id="step-3">
-                    <div class="step-number">3</div>
-                    <h3 class="text-sm font-bold text-slate-800 mb-1">Format the Report</h3>
-                    <p class="text-[11px] text-slate-500 mb-4">Use professional tools to highlight important sections.</p>
-                    
-                    <div class="grid grid-cols-4 gap-2 mb-4">
-                        <button onclick="toggleBold()" class="tool-button" id="tool-bold" title="Bold">
-                            <i class="fas fa-bold"></i>
-                            <span class="text-[9px] mt-1 font-bold">BOLD</span>
-                        </button>
-                        <button onclick="toggleItalic()" class="tool-button" id="tool-italic" title="Italic">
-                            <i class="fas fa-italic"></i>
-                            <span class="text-[9px] mt-1 font-bold">ITALIC</span>
-                        </button>
-                        <button onclick="setTool('tick-green')" id="tool-tick-green" class="tool-button" title="Add Green Tick">
-                            <i class="fas fa-check text-emerald-500"></i>
-                            <span class="text-[9px] mt-1 font-bold">TICK</span>
-                        </button>
-                        <button onclick="openSignatureModal()" class="tool-button" title="Add Signature">
-                            <i class="fas fa-signature text-blue-500"></i>
-                            <span class="text-[9px] mt-1 font-bold">SIGN</span>
-                        </button>
-                    </div>
+  <!-- Dock Bar -->
+  <nav class="dock-bar">
+    <button onclick="toggleTray('tray-title', this)" class="dock-btn">
+      <i class="fas fa-heading"></i><span>Title</span>
+    </button>
+    <button onclick="toggleTray('tray-remarks', this)" class="dock-btn">
+      <i class="fas fa-align-left"></i><span>Note</span>
+    </button>
+    <button onclick="toggleTray('tray-format', this)" class="dock-btn">
+      <i class="fas fa-square-check"></i><span>Tools</span>
+    </button>
+    <button onclick="openSignatureModal()" class="dock-btn">
+      <i class="fas fa-signature"></i><span>Sign</span>
+    </button>
+    <button onclick="downloadPDF('single')" class="dock-btn" style="color:var(--danger);">
+      <i class="fas fa-file-pdf"></i><span>PDF</span>
+    </button>
+  </nav>
+</div>
 
-                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Font Size</span>
-                        <div class="flex items-center space-x-3">
-                            <button onclick="adjustFontSize(-2)" class="p-1 hover:text-blue-600"><i class="fas fa-minus text-xs"></i></button>
-                            <input type="number" id="font-size" value="20" min="8" max="100" class="w-10 bg-transparent text-center text-xs font-bold font-mono">
-                            <button onclick="adjustFontSize(2)" class="p-1 hover:text-blue-600"><i class="fas fa-plus text-xs"></i></button>
-                        </div>
-                    </div>
-                </div>
+<!-- Zoom Footer (Desktop) -->
+<div class="zoom-ctrl">
+  <button onclick="zoomOut()"  class="btn btn-ghost btn-icon btn-sm"><i class="fas fa-minus"></i></button>
+  <span id="zoom-label" style="font-size:11px; font-weight:900; align-self:center; min-width:40px; text-align:center; color:var(--primary);">100%</span>
+  <button onclick="zoomIn()"   class="btn btn-ghost btn-icon btn-sm"><i class="fas fa-plus"></i></button>
+  <button onclick="resetZoom()" class="btn btn-ghost btn-sm" style="font-size:10px; font-weight:800;">AUTO</button>
+</div>
 
-                <!-- Step 4: Preview & Save -->
-                <div class="step-card" id="step-4">
-                    <div class="step-number">4</div>
-                    <h3 class="text-sm font-bold text-slate-800 mb-1">Preview & Save</h3>
-                    <p class="text-[11px] text-slate-500 mb-4">Review your final document and export it to PDF.</p>
-                    
-                    <div class="space-y-2">
-                        <button onclick="downloadPDF('single')" class="w-full py-3 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center">
-                            <i class="fas fa-file-pdf mr-2"></i> Export PDF
-                        </button>
-                        <button onclick="saveReport()" class="w-full py-3 border-2 border-slate-100 hover:border-blue-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-xl text-xs font-bold transition-all">
-                            Save Progress
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Zoom Footer -->
-            <div class="p-4 border-t border-gray-100 bg-white flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                    <button onclick="zoomOut()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
-                        <i class="fas fa-minus text-xs"></i>
-                    </button>
-                    <span id="zoom-label" class="text-[10px] font-mono font-bold text-slate-500 min-w-[40px] text-center">100%</span>
-                    <button onclick="zoomIn()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
-                        <i class="fas fa-plus text-xs"></i>
-                    </button>
-                </div>
-                <button onclick="resetZoom()" class="text-[10px] font-bold text-blue-600 uppercase tracking-widest hover:underline">
-                    Reset View
-                </button>
-            </div>
-        </aside>
-
-        <!-- Main Workspace: Live Preview -->
-        <div id="canvas-container" class="flex-1 overflow-auto bg-slate-100 p-12 scrollbar-hide relative flex flex-col items-center">
-            <div class="mb-6 flex items-center space-x-2 text-slate-400">
-                <i class="fas fa-eye text-xs"></i>
-                <span class="text-[10px] font-black uppercase tracking-[0.3em]">Live Preview</span>
-            </div>
-            
-            <div id="canvas-wrapper" class="rounded-sm transform-gpu transition-transform duration-200">
-                <canvas id="report-canvas"></canvas>
-            </div>
-
-            <!-- Loading Overlay -->
-            <div id="loader" class="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <p class="text-xs font-bold text-blue-800 uppercase tracking-[0.2em] mt-4">Preparing Workspace...</p>
-            </div>
-        </div>
-    </main>
-
-    <!-- Context Floating Bar (Redesigned) -->
-    <div id="context-toolbar" class="fixed bottom-12 right-12 bg-white rounded-2xl shadow-2xl border border-slate-100 px-6 py-4 hidden z-40 flex items-center space-x-6 animate-in slide-in-from-bottom-5">
-        <div class="flex flex-col">
-            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Item</span>
-            <span class="text-xs font-bold text-slate-800">Edit Selection</span>
-        </div>
-        <div class="h-8 w-px bg-slate-100"></div>
-        <button onclick="deleteSelected()" class="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-            Delete Item
-        </button>
+<!-- Signature Modal -->
+<div id="sig-modal" class="modal-sheet hidden">
+  <div class="card" style="width:100%; max-width:480px; padding:1.5rem; max-height: 90vh; overflow-y: auto;">
+    <h3 style="font-size:16px; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
+       Digital Signature
+       <button onclick="closeSignatureModal()" class="btn btn-ghost btn-sm"><i class="fas fa-times"></i></button>
+    </h3>
+    
+    <div class="sig-tabs">
+      <div class="sig-tab active" onclick="switchSigTab('draw', event)">Draw</div>
+      <div class="sig-tab" onclick="switchSigTab('type', event)">Type</div>
+      <div class="sig-tab" onclick="switchSigTab('upload', event)">Upload</div>
     </div>
 
-    <!-- PDF Download Menu -->
-    <div id="download-menu"
-        class="fixed right-6 top-32 w-64 bg-white rounded-[32px] shadow-2xl border border-gray-100 p-6 z-[100] hidden animate-in zoom-in-95 slide-in-from-right-10 duration-300">
-        <h3 class="text-sm font-bold text-gray-800 mb-6 flex items-center">
-            <i class="fas fa-file-pdf mr-2 text-red-500"></i> Export Settings
-        </h3>
-        <div class="space-y-3">
-            <button onclick="downloadPDF('single')"
-                class="w-full text-left px-5 py-4 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 rounded-2xl text-xs font-bold transition-all flex items-center group">
-                <i class="fas fa-file-alt mr-4 text-indigo-400 group-hover:scale-110 transition-transform"></i>
-                <span>This Report Only</span>
-            </button>
-            <button onclick="openMultiDownload()"
-                class="w-full text-left px-5 py-4 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 rounded-2xl text-xs font-bold transition-all flex items-center group">
-                <i class="fas fa-copy mr-4 text-indigo-400 group-hover:scale-110 transition-transform"></i>
-                <span>Select Multiple</span>
-            </button>
-        </div>
+    <!-- Draw Pane -->
+    <div id="sig-pane-draw" class="sig-pane active">
+      <div class="sig-canvas-wrap mb-4">
+         <canvas id="sig-pad" style="width:100%; height:200px; display:block;"></canvas>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+         <button onclick="sigPad.clear()" class="btn btn-secondary btn-sm">Clear</button>
+         <button onclick="applySignatureDraw()" class="btn btn-primary btn-sm">Place on Page</button>
+      </div>
     </div>
 
-    <!-- Multi-Download Modal -->
-    <div id="multi-dl-modal"
-        class="fixed inset-0 bg-gray-900/40 backdrop-blur-md z-[200] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border border-white/20">
-            <div class="px-8 py-8 border-b border-gray-100 flex items-center justify-between">
-                <div>
-                    <h3 class="text-xl font-bold text-gray-800">Combine Reports</h3>
-                    <p class="text-xs text-gray-500 font-medium">Select reports to include in the PDF bundle</p>
-                </div>
-                <button onclick="closeMultiDownload()" class="text-gray-400 hover:text-gray-900"><i
-                        class="fas fa-times"></i></button>
-            </div>
-            <div class="max-h-96 overflow-y-auto p-8 space-y-2 scrollbar-thin" id="multi-dl-list">
-                <!-- Checkbox list items -->
-            </div>
-            <div class="px-8 py-8 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <button onclick="selectAllRemarks(true)"
-                    class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Select All Remarks</button>
-                <button onclick="generateCombinedPDF()"
-                    class="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-200">Export
-                    Combined</button>
-            </div>
-        </div>
+    <!-- Type Pane -->
+    <div id="sig-pane-type" class="sig-pane">
+       <input type="text" id="sig-type-input" class="input mb-4" placeholder="Type your name..." oninput="updateSigTypePreviews()">
+       <div style="max-height: 220px; overflow-y: auto; padding-right:8px;" class="mb-4">
+         <div class="font-preview selected" style="font-family:'Dancing Script', cursive;" onclick="selectSigFont(0, this)">InspectAI Signature</div>
+         <div class="font-preview" style="font-family:'Alex Brush', cursive;" onclick="selectSigFont(1, this)">InspectAI Signature</div>
+         <div class="font-preview" style="font-family:'Great Vibes', cursive;" onclick="selectSigFont(2, this)">InspectAI Signature</div>
+       </div>
+       <button onclick="applySignatureType()" class="btn btn-primary btn-sm" style="width:100%;">Place on Page</button>
     </div>
 
-    <!-- Premium Signature Modal -->
-    <div id="sig-modal"
-        class="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[200] hidden flex items-center justify-center p-6 animate-in fade-in duration-300">
-        <div
-            class="bg-white/95 rounded-[48px] shadow-2xl w-full max-w-5xl overflow-hidden border border-white/40 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
-            <!-- Modal Header -->
-            <div class="px-12 py-10 border-b border-slate-100/50 flex items-center justify-between bg-white/50">
-                <div class="flex items-center space-x-5">
-                    <div
-                        class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
-                        <i class="fas fa-signature text-2xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-2xl font-black text-slate-900 tracking-tight">Legal Authorization</h3>
-                        <p class="text-xs font-bold text-blue-500/60 uppercase tracking-widest mt-1">Official Document
-                            Signature</p>
-                    </div>
-                </div>
-                <button onclick="closeSignatureModal()"
-                    class="w-12 h-12 flex items-center justify-center rounded-2xl hover:bg-red-50 hover:text-red-500 text-slate-300 transition-all">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-
-            <!-- Modal Body -->
-            <div class="flex-1 overflow-y-auto p-12 custom-scrollbar">
-                <!-- Premium Tabs -->
-                <div
-                    class="flex items-center space-x-3 bg-slate-100/60 p-2 rounded-[24px] mb-12 w-fit mx-auto shadow-inner">
-                    <button onclick="switchSigTab('draw')" id="sig-tab-draw" class="sig-tab active">
-                        <i class="fas fa-pen-nib mr-2"></i><span>Draw</span>
-                    </button>
-                    <button onclick="switchSigTab('type')" id="sig-tab-type" class="sig-tab">
-                        <i class="fas fa-keyboard mr-2"></i><span>Type</span>
-                    </button>
-                    <button onclick="switchSigTab('upload')" id="sig-tab-upload" class="sig-tab">
-                        <i class="fas fa-upload mr-2"></i><span>Upload</span>
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
-                    <!-- High-Performance Input Area -->
-                    <div class="lg:col-span-7 space-y-8">
-                        <div id="sig-panel-draw" class="space-y-6">
-                            <div class="relative group">
-                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]"
-                                    id="sig-draw-guide">
-                                    <h2 class="text-6xl font-black italic uppercase tracking-[0.5em]">Sign Here</h2>
-                                </div>
-                                <div
-                                    class="bg-white rounded-[40px] border-2 border-dashed border-slate-200 p-2 group-hover:border-blue-400 transition-all shadow-2xl relative overflow-hidden signature-plate">
-                                    <canvas id="sig-pad"
-                                        class="w-full h-64 rounded-[32px] bg-white cursor-crosshair relative z-10"></canvas>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between px-4">
-                                <div class="flex items-center space-x-4">
-                                    <button onclick="setSigInk('#000000')"
-                                        class="w-8 h-8 rounded-full border-4 border-white shadow-lg bg-black active-ink"
-                                        id="ink-black"></button>
-                                    <button onclick="setSigInk('#2563eb')"
-                                        class="w-8 h-8 rounded-full border-4 border-white shadow-lg bg-blue-600"
-                                        id="ink-indigo"></button>
-                                </div>
-                                <button onclick="clearSig()"
-                                    class="flex items-center space-x-2 text-[10px] font-black text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest">
-                                    <i class="fas fa-undo-alt"></i><span>Reset Canvas</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div id="sig-panel-type" class="hidden space-y-8">
-                            <div class="space-y-4">
-                                <label
-                                    class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Signature
-                                    Text</label>
-                                <input type="text" id="sig-type-input" placeholder="Your Full Name"
-                                    oninput="updateSigPreview()"
-                                    class="w-full px-8 py-5 bg-gray-50 border-0 rounded-[24px] focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-bold text-2xl text-gray-800 shadow-inner">
-                            </div>
-                            <div class="grid grid-cols-3 gap-4">
-                                <button onclick="setSigFont('Dancing Script')" id="font-dancing"
-                                    class="p-4 border border-gray-100 rounded-2xl bg-white hover:border-indigo-200 transition-all font-['Dancing_Script'] text-2xl active-font">Style
-                                    One</button>
-                                <button onclick="setSigFont('Alex Brush')" id="font-alex"
-                                    class="p-4 border border-gray-100 rounded-2xl bg-white hover:border-indigo-200 transition-all font-['Alex_Brush'] text-2xl">Style
-                                    Two</button>
-                                <button onclick="setSigFont('Great Vibes')" id="font-great"
-                                    class="p-4 border border-gray-100 rounded-2xl bg-white hover:border-indigo-200 transition-all font-['Great_Vibes'] text-2xl">Style
-                                    Three</button>
-                            </div>
-                        </div>
-
-                        <div id="sig-panel-upload" class="hidden space-y-6">
-                            <div class="relative group h-[340px]">
-                                <input type="file" id="sig-file-input" accept="image/*" onchange="handleSigUpload(this)"
-                                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                                <div
-                                    class="h-full border-2 border-dashed border-gray-200 rounded-[40px] group-hover:border-indigo-400 group-hover:bg-indigo-50/20 transition-all flex flex-col items-center justify-center space-y-6 px-12 text-center shadow-inner">
-                                    <div
-                                        class="w-20 h-20 bg-white rounded-[28px] shadow-2xl flex items-center justify-center text-indigo-500 transition-transform group-hover:scale-110">
-                                        <i class="fas fa-file-upload text-3xl"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-lg font-bold text-gray-800">Upload Image</h4>
-                                        <p class="text-[11px] text-gray-400 mt-2 uppercase font-bold tracking-widest">
-                                            PNG, JPG or WEBP (Max 5MB)</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="sig-upload-loading"
-                                class="hidden items-center justify-center space-x-4 bg-indigo-50 py-4 rounded-2xl text-indigo-600 font-bold text-xs uppercase tracking-widest">
-                                <div
-                                    class="w-5 h-5 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin">
-                                </div>
-                                <span>AI Processing Background...</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Enhanced Live Preview Area -->
-                    <div class="lg:col-span-5 flex flex-col h-full">
-                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 ml-2">Live
-                            Verification</label>
-                        <div
-                            class="flex-1 bg-white rounded-[40px] border border-gray-100 flex items-center justify-center overflow-hidden p-10 min-h-[340px] shadow-2xl shadow-gray-100 preview-plate">
-                            <div id="sig-preview" class="w-full h-full flex flex-col items-center justify-center">
-                                <div class="opacity-10 text-center space-y-4">
-                                    <i class="fas fa-stamp text-7xl"></i>
-                                    <p class="text-xs font-black uppercase tracking-[1em]">ID Pending</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div
-                            class="mt-8 flex items-start space-x-4 bg-gray-50/80 p-6 rounded-3xl border border-gray-100">
-                            <div
-                                class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                                <i class="fas fa-info-circle text-xs"></i>
-                            </div>
-                            <p class="text-[11px] text-gray-500 font-medium leading-relaxed">
-                                Our AI system will process your signature to ensure transparency. You can adjust the
-                                size once it's placed on the document.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="px-12 py-10 bg-gray-50/50 border-t border-gray-100/50 flex items-center justify-between">
-                <div class="flex items-center text-gray-400 space-x-3">
-                    <i class="fas fa-shield-alt"></i>
-                    <span class="text-[10px] font-bold uppercase tracking-widest">Encrypted Transmission</span>
-                </div>
-                <div class="flex items-center space-x-6">
-                    <button onclick="closeSignatureModal()"
-                        class="px-8 py-4 text-xs font-black text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-all">Discard</button>
-                    <button onclick="applySignature()"
-                        class="px-12 py-4 bg-gray-900 text-white rounded-[24px] text-xs font-black uppercase tracking-widest shadow-2xl flex items-center space-x-3 hover:bg-gray-800 hover:-translate-y-1 transition-all active:translate-y-0">
-                        <span>Place Authoritatively</span>
-                        <i class="fas fa-arrow-right text-[10px]"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
+    <!-- Upload Pane -->
+    <div id="sig-pane-upload" class="sig-pane">
+       <div class="sig-canvas-wrap flex-center mb-2" style="height:170px; flex-direction:column; gap:var(--sp-2); cursor:pointer;" onclick="document.getElementById('sig-upload-input').click()">
+         <i class="fas fa-image" style="font-size:2rem; color:var(--text-faint);"></i>
+         <span style="font-weight:700; color:var(--text-muted);">Click to upload PNG/JPG</span>
+       </div>
+       <input type="file" id="sig-upload-input" accept="image/png, image/jpeg" style="display:none;" onchange="handleSigUpload(event)">
+       
+       <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:var(--text-muted); cursor:pointer;">
+         <input type="checkbox" id="sig-remove-bg" checked> Remove white background
+       </label>
     </div>
 
-    <script>
-        // Step 6: Initialize Data from Server
-        const FILE_ID = "{{ file.file_id }}";
-        const ALL_PAGES = {{ pages | tojson | safe }};
-        const INITIAL_PAGE_NUM = parseInt("{{ initial_page }}") || 1;
+  </div>
+</div>
 
-        let remarksList = ALL_PAGES.filter(p => p.has_remarks);
-        let currentIndex = Math.max(remarksList.findIndex(p => p.page_number === INITIAL_PAGE_NUM), 0);
+<script>
+  const FILE_ID = "{{ file.file_id }}";
+  const ALL_PAGES = {{ pages | tojson | safe }};
+  const INITIAL_PAGE = parseInt("{{ initial_page }}") || 1;
 
-        let canvas = null;
-        let sigPad = null;
-        let currentTool = 'select';
-        let zoom = 1;
-        let baseScale = 1;
-        let isDirty = false;
-        let isSaving = false;
+  let remarksList = ALL_PAGES.filter(p => p.has_remarks);
+  let currentIndex = Math.max(remarksList.findIndex(p => p.page_number === INITIAL_PAGE), 0);
+  let canvas, sigPad, currentTool = 'select', zoom=1, baseScale=1, isDirty=false;
 
-        // Step 4.1: Initial Mount Logic
-        window.addEventListener('load', function () {
-            const container = document.getElementById('canvas-container');
+  window.addEventListener('load', () => {
+    canvas = new fabric.Canvas('report-canvas', { backgroundColor:'#fff', preserveObjectStacking:true });
+    if (!remarksList.length) { alert('No flagged pages found.'); window.location.href='/file/'+FILE_ID; return; }
+    loadReport(remarksList[currentIndex]);
+    initListeners();
+    initSigPad();
+  });
 
-            // Step 1: Initialize Fabric Canvas
-            canvas = new fabric.Canvas('report-canvas', {
-                backgroundColor: '#ffffff',
-                preserveObjectStacking: true,
-                selection: true
-            });
-            window.reportCanvas = canvas;
+  function initSigPad() {
+    const c = document.getElementById('sig-pad');
+    sigPad = new SignaturePad(c, { penColor:'#000', minWidth:1 });
+    window.addEventListener('resize', () => {
+      const r = window.devicePixelRatio || 1;
+      c.width = c.offsetWidth * r; c.height = c.offsetHeight * r;
+      c.getContext('2d').scale(r, r);
+    });
+  }
 
-            // Step 2: Load Initial Report
-            initEditor();
+  async function loadReport(page) {
+    document.getElementById('loader').style.display='flex';
+    document.getElementById('page-counter').textContent = `PAGE ${page.page_number}`;
+    document.getElementById('btn-prev').disabled = currentIndex === 0;
+    document.getElementById('btn-next').disabled = currentIndex === remarksList.length-1;
 
-            // Global Listeners
-            initGlobalListeners();
+    try {
+      const res = await fetch(`/api/file/${FILE_ID}/load-canvas?page_number=${page.page_number}`);
+      const data = await res.json();
+      fabric.Image.fromURL(page.image_url, (img) => {
+        const cont = document.getElementById('canvas-container');
+        const vpH = cont.clientHeight - 100;
+        const vpW = cont.clientWidth - 32;
+        
+        if (window.innerWidth <= 768) {
+          baseScale = Math.min(vpW / img.width, 1);
+        } else {
+          baseScale = Math.min(vpH / img.height, 1);
+        }
+        
+        canvas.setDimensions({ width: img.width*baseScale, height: img.height*baseScale });
+        canvas.clear();
+        if (data.canvas_state) {
+          canvas.loadFromJSON(data.canvas_state, () => finalizeLoad(img));
+        } else {
+          finalizeLoad(img);
+        }
+      }, { crossOrigin:'anonymous' });
+    } catch(e) { document.getElementById('loader').style.display='none'; }
+  }
+
+  function finalizeLoad(img) {
+    img.set({ left:0, top:0, scaleX:baseScale, scaleY:baseScale, selectable:false, evented:false, isBackground:true });
+    canvas.add(img).sendToBack(img);
+    canvas.renderAll();
+    resetZoom();
+    document.getElementById('loader').style.display='none';
+    isDirty=false;
+  }
+
+  function navigate(d) {
+    if (isDirty && !confirm('Discard changes?')) return;
+    currentIndex += d; loadReport(remarksList[currentIndex]);
+  }
+
+  function toggleTray(id, btn) {
+    const tray = document.getElementById(id);
+    const wasActive = tray.classList.contains('active');
+    document.querySelectorAll('.dock-tray').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('active'));
+    if (!wasActive) { tray.classList.add('active'); btn.classList.add('active'); }
+  }
+
+  function placeTitle() {
+    const v = document.getElementById('title-input').value.trim(); if(!v) return;
+    const t = new fabric.IText(v, { left:canvas.width/2, top:40, fontSize:32, fontFamily:'Sora', fontWeight:'800', originX:'center' });
+    canvas.add(t).setActiveObject(t); canvas.renderAll();
+  }
+
+  function placeContent() {
+    const v = document.getElementById('remarks-input').value.trim(); if(!v) return;
+    const t = new fabric.IText(v, { left:40, top:100, fontSize:20, fontFamily:'Manrope', width:300 });
+    canvas.add(t).setActiveObject(t); canvas.renderAll();
+  }
+
+  function setTool(t) {
+    currentTool = t;
+    document.querySelectorAll('.tool-btn-small').forEach(b => b.classList.remove('active'));
+    if (t==='tick-green') document.getElementById('tool-tick').classList.add('active');
+  }
+
+  function deleteSelected() {
+    canvas.getActiveObjects().forEach(o=>{if(!o.isBackground)canvas.remove(o);}); 
+    canvas.discardActiveObject().renderAll();
+  }
+
+  function toggleBold() { const o=canvas.getActiveObject(); if(o && o.type==='i-text') { o.set('fontWeight', o.fontWeight==='800'?'normal':'800'); canvas.renderAll(); } }
+  function toggleItalic() { const o=canvas.getActiveObject(); if(o && o.type==='i-text') { o.set('fontStyle', o.fontStyle==='italic'?'normal':'italic'); canvas.renderAll(); } }
+  function adjustFontSize(d) {
+    const val = document.getElementById('font-size-val');
+    const s = Math.max(8, Math.min(parseInt(val.textContent)+d, 120));
+    val.textContent = s;
+    canvas.getActiveObjects().forEach(o => { if(o.type==='i-text') o.set('fontSize', s); });
+    canvas.renderAll();
+  }
+
+  function initListeners() {
+    canvas.on('mouse:down', (o) => {
+       if (currentTool === 'tick-green' && !o.target) {
+         const p = canvas.getPointer(o.e);
+         const tick = new fabric.Text('✔', { left:p.x, top:p.y, fontSize:50, fill:'#2e7d32', fontWeight:'800' });
+         canvas.add(tick).renderAll(); setTool('select');
+       }
+    });
+    canvas.on('object:added', ()=>isDirty=true);
+    canvas.on('object:modified', ()=>isDirty=true);
+  }
+
+  function zoomIn() { if(zoom<4){ zoom+=.2; applyZoom(); } }
+  function zoomOut() { if(zoom>.2){ zoom-=.2; applyZoom(); } }
+  function resetZoom() { zoom=1; applyZoom(); }
+  function applyZoom() {
+    canvas.setZoom(zoom);
+    const bg = canvas.getObjects('image').find(o=>o.isBackground);
+    const w = bg.width*baseScale*zoom, h = bg.height*baseScale*zoom;
+    canvas.setDimensions({ width:w, height:h });
+    document.getElementById('zoom-label').textContent = Math.round(zoom*100)+'%';
+  }
+
+  // ── Signature Logic ──
+  let selectedSigFont = "'Dancing Script', cursive";
+  
+  function switchSigTab(tab, ev) {
+    document.querySelectorAll('.sig-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sig-pane').forEach(p => p.classList.remove('active'));
+    if(ev) ev.currentTarget.classList.add('active');
+    document.getElementById('sig-pane-' + tab).classList.add('active');
+    
+    // Refresh canvas size if switching back to draw
+    if(tab === 'draw') {
+      setTimeout(() => { 
+        const c=document.getElementById('sig-pad'); 
+        const r=window.devicePixelRatio||1; 
+        c.width=c.offsetWidth*r; 
+        c.height=c.offsetHeight*r; 
+        c.getContext('2d').scale(r,r); 
+        sigPad.clear(); 
+      }, 10);
+    }
+  }
+
+  function updateSigTypePreviews() {
+    const val = document.getElementById('sig-type-input').value || 'InspectAI Signature';
+    document.querySelectorAll('.font-preview').forEach(p => p.textContent = val);
+  }
+
+  function selectSigFont(idx, el) {
+    document.querySelectorAll('.font-preview').forEach(p => p.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedSigFont = el.style.fontFamily;
+  }
+
+  function placeSigImage(dataUrl) {
+    fabric.Image.fromURL(dataUrl, (img) => {
+       const bg = canvas.getObjects('image').find(o=>o.isBackground);
+       img.scale((bg.width*0.25)/img.width);
+       canvas.add(img).centerObject(img).setActiveObject(img).renderAll();
+       closeSignatureModal();
+    });
+  }
+
+  function applySignatureDraw() {
+    if (sigPad.isEmpty()) return;
+    placeSigImage(sigPad.toDataURL());
+  }
+
+  function applySignatureType() {
+    const v = document.getElementById('sig-type-input').value.trim();
+    if (!v) return;
+    const t = new fabric.Text(v, {
+      left: canvas.width/2, top: canvas.height/2,
+      fontFamily: selectedSigFont.split(',')[0].replace(/['"]/g,''),
+      fontSize: 80, fill: '#000', originX: 'center', originY: 'center'
+    });
+    canvas.add(t).setActiveObject(t).renderAll();
+    closeSignatureModal();
+  }
+
+  async function handleSigUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const removeBg = document.getElementById('sig-remove-bg').checked;
+    
+    if (removeBg) {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await fetch('/api/reports/remove-background', {
+          method: 'POST',
+          body: formData
         });
-
-        async function initEditor() {
-            if (remarksList.length === 0) {
-                showError("No reports with remarks found.");
-                return;
-            }
-
-            // Sync UI State
-            updateNavigation();
-
-            // Load the current report
-            await loadReport(remarksList[currentIndex]);
+        
+        if (!response.ok) {
+          const errData = await response.json().catch(()=>({}));
+          alert(errData.message || 'Background removal failed. Falling back to original image.');
+          // Fallback to original
+          fallbackLoadOriginal(file);
+          return;
         }
-
-        // Step 4.2: Robust Image Loading Logic
-        async function loadReport(page) {
-            showSpinner(true);
-            const container = document.getElementById('canvas-container');
-
-            try {
-                // 1. Fetch saved state first (v8 Persistence)
-                const res = await fetch(`/api/file/${FILE_ID}/load-canvas?page_number=${page.page_number}`);
-                const data = await res.json();
-
-                // 2. Load the image base
-                fabric.Image.fromURL(page.image_url, function (img, isError) {
-                    if (isError || !img) {
-                        showError("Failed to load report image.");
-                        showSpinner(false);
-                        return;
-                    }
-
-                    // Height-fit scaling (Strict Requirement)
-                    const padding = 200;
-                    const viewH = container.clientHeight - padding;
-                    baseScale = viewH / img.height;
-
-                    if (baseScale > 1) baseScale = 1; // Don't upscale past 100%
-
-                    // Apply layout
-                    const scaledW = img.width * baseScale;
-                    const scaledH = img.height * baseScale;
-
-                    canvas.setDimensions({ width: scaledW, height: scaledH });
-
-                    // Reset internal coordinate system
-                    canvas.clear();
-                    canvas.setZoom(1);
-                    canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
-                    canvas.calcOffset();
-
-                    // If state exists, load the JSON
-                    if (data.success && data.canvas_state) {
-                        canvas.loadFromJSON(data.canvas_state, function () {
-                            // Ensure background image is there and scaled
-                            setupBackground(img);
-                            canvas.renderAll();
-                            isDirty = false;
-                            showSpinner(false);
-                        });
-                    } else {
-                        setupBackground(img);
-                        canvas.renderAll();
-                        isDirty = false;
-                        showSpinner(false);
-                    }
-                }, { crossOrigin: 'anonymous' });
-
-            } catch (err) {
-                showError("Connection error. Please try again.");
-                showSpinner(false);
-            }
-        }
-
-        function setupBackground(img) {
-            img.set({
-                originX: 'left', originY: 'top',
-                left: 0, top: 0,
-                scaleX: baseScale, scaleY: baseScale,
-                selectable: false, evented: false,
-                isBackground: true
-            });
-            canvas.add(img);
-            canvas.sendToBack(img);
-        }
-
-        // Step 5: Zoom Controls (Fixed v14 Visibility)
-        const STEP = 0.15, MIN = 0.25, MAX = 4.0;
-        function applyZoom() {
-            // Get background image dimensions
-            const bgImg = canvas.getObjects('image').find(o => o.isBackground);
-            if (!bgImg) return;
-
-            // 1. Calculate the new physical size for the canvas element
-            const newW = bgImg.width * baseScale * zoom;
-            const newH = bgImg.height * baseScale * zoom;
-
-            // 2. Set dimensions of the actual HTML canvas element
-            canvas.setDimensions({ width: newW, height: newH });
-
-            // 3. Update the Fabric zoom level
-            canvas.setZoom(zoom);
-
-            // 4. Reset viewport to top-left to avoid cut-off during extreme zoom
-            canvas.viewportTransform = [zoom, 0, 0, zoom, 0, 0];
-
-            // Update wrapper for aesthetic consistency
-            const wrapper = document.getElementById('canvas-wrapper');
-            wrapper.style.width = newW + 'px';
-            wrapper.style.height = newH + 'px';
-
-            document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
-            canvas.renderAll();
-        }
-
-        function zoomIn() { zoom = Math.min(zoom + STEP, MAX); applyZoom(); }
-        function zoomOut() { zoom = Math.max(zoom - STEP, MIN); applyZoom(); }
-        function resetZoom() { zoom = 1; applyZoom(); }
-
-        // Step 6: Navigation Logic
-        function updateNavigation() {
-            document.getElementById('page-counter').textContent = `ITEM ${currentIndex + 1} OF ${remarksList.length}`;
-            document.getElementById('btn-prev').disabled = currentIndex === 0;
-            document.getElementById('btn-next').disabled = currentIndex === remarksList.length - 1;
-        }
-
-        async function navigate(direction) {
-            if (isDirty) {
-                if (!confirm("Discard unsaved changes?")) return;
-            }
-            currentIndex += direction;
-            zoom = 1;
-            applyZoom();
-            updateNavigation();
-            await loadReport(remarksList[currentIndex]);
-        }
-
-        // Step 7: Final Save Logic (Persistent and High Quality)
-        async function saveReport() {
-            if (isSaving) return;
-            isSaving = true;
-            const btn = document.getElementById('btn-save');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SAVING...';
-
-            try {
-                // Reset zoom for high-res snapshot
-                const oldZoom = canvas.getZoom();
-                canvas.setZoom(1);
-
-                // Set dimensions to original unscaled bitmap size for best quality
-                const bgImg = canvas.getObjects('image').find(o => o.isBackground);
-                const originalW = bgImg.width;
-                const originalH = bgImg.height;
-
-                // Temporarily scale everything up to 1:1
-                const vpt = canvas.viewportTransform;
-                const finalScale = 1 / baseScale;
-                canvas.setZoom(finalScale);
-                canvas.setDimensions({ width: originalW, height: originalH });
-
-                const imageData = canvas.toDataURL({ format: 'png', quality: 1 });
-
-                // Restore zoom
-                canvas.setZoom(oldZoom);
-                canvas.viewportTransform = vpt;
-                canvas.setDimensions({ width: bgImg.width * baseScale, height: bgImg.height * baseScale });
-
-                const payload = {
-                    canvas_state: JSON.stringify(canvas.toJSON()),
-                    page_number: remarksList[currentIndex].page_number,
-                    image_data: imageData
-                };
-
-                const res = await fetch(`/api/file/${FILE_ID}/save-canvas`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    showToast("Report saved successfully.");
-                    isDirty = false;
-                } else {
-                    const err = await res.json();
-                    showError(err.message || "Failed to save report.");
-                }
-            } catch (err) {
-                showError("Save failed: " + err.message);
-            } finally {
-                isSaving = false;
-                btn.innerHTML = original;
-            }
-        }
-
-        // Step 8: Multi-Stage PDF Export (Fixed v16 Zero Margins)
-        async function downloadPDF(mode) {
-            document.getElementById('download-menu').classList.add('hidden');
-
-            if (mode === 'single') {
-                showToast("Generating PDF...", "info");
-                const { jsPDF } = window.jspdf;
-
-                const bgImg = canvas.getObjects('image').find(o => o.isBackground);
-                if (!bgImg) return showError("Report not loaded.");
-
-                const imgW = bgImg.width;
-                const imgH = bgImg.height;
-                const orientation = imgW > imgH ? 'l' : 'p';
-
-                // Pixel-perfect constructor with scaling hotfix
-                const pdf = new jsPDF({
-                    orientation: orientation,
-                    unit: 'px',
-                    format: [imgW, imgH],
-                    hotfixes: ['px_scaling']
-                });
-
-                // High-res capture (Strict alignment fix)
-                const oldZoom = canvas.getZoom();
-                const oldVpt = [...canvas.viewportTransform];
-                const oldW = canvas.width;
-                const oldH = canvas.height;
-
-                // Temporarily scale to 1:1 original resolution
-                canvas.setDimensions({ width: imgW, height: imgH });
-                canvas.setZoom(1 / baseScale);
-                canvas.viewportTransform = [1 / baseScale, 0, 0, 1 / baseScale, 0, 0];
-                canvas.calcOffset();
-
-                const data = canvas.toDataURL({ format: 'png', quality: 1.0 });
-
-                // Restore previous view state
-                canvas.setDimensions({ width: oldW, height: oldH });
-                canvas.setZoom(oldZoom);
-                canvas.viewportTransform = oldVpt;
-                canvas.calcOffset();
-
-                // Add image at exact (0,0) with no scaling requested from PDF (already sized)
-                pdf.addImage(data, 'PNG', 0, 0, imgW, imgH, undefined, 'FAST');
-                pdf.save(`Report_Page_${remarksList[currentIndex].page_number}.pdf`);
-            }
-        }
-
-        // Tooling Logic
-        function setTool(tool) {
-            currentTool = tool;
-            // Update UI
-            document.querySelectorAll('.tool-button').forEach(b => b.classList.remove('active'));
-            const activeBtn = document.getElementById(`tool-${tool}`);
-            if (activeBtn) activeBtn.classList.add('active');
-
-            canvas.isDrawingMode = false;
-            canvas.selection = (tool === 'select');
-            canvas.defaultCursor = (tool === 'select') ? 'default' : 'crosshair';
-            
-            // Auto-focus the relevant step
-            const stepId = tool.startsWith('tick') ? 'step-3' : (tool === 'text' ? 'step-2' : null);
-            if (stepId) activateStep(stepId);
-        }
-
-        function activateStep(id) {
-            document.querySelectorAll('.step-card').forEach(s => s.classList.toggle('active', s.id === id));
-        }
-
-        // Wizard Helper Functions
-        function placeTitle() {
-            const val = document.getElementById('report-title-input').value.trim();
-            if (!val) return showToast("Please enter a title first");
-            
-            const t = new fabric.IText(val, {
-                left: canvas.width / 2,
-                top: 50,
-                fontSize: 40,
-                fontFamily: 'Inter',
-                fontWeight: 'bold',
-                fill: '#1e293b',
-                originX: 'center'
-            });
-            canvas.add(t).setActiveObject(t).renderAll();
-            activateStep('step-3');
-        }
-
-        function placeContent() {
-            const val = document.getElementById('report-content-input').value.trim();
-            if (!val) return showToast("Please enter some content first");
-            
-            const t = new fabric.IText(val, {
-                left: 50,
-                top: 150,
-                fontSize: 20,
-                fontFamily: 'Inter',
-                fill: '#334155',
-                width: 400
-            });
-            canvas.add(t).setActiveObject(t).renderAll();
-            activateStep('step-3');
-        }
-
-        function toggleBold() {
-            const obj = canvas.getActiveObject();
-            if (!obj || (obj.type !== 'i-text' && obj.type !== 'text')) return showToast("Select text to format");
-            
-            const isBold = obj.fontWeight === 'bold';
-            obj.set('fontWeight', isBold ? 'normal' : 'bold');
-            document.getElementById('tool-bold').classList.toggle('active', !isBold);
-            canvas.renderAll();
-        }
-
-        function toggleItalic() {
-            const obj = canvas.getActiveObject();
-            if (!obj || (obj.type !== 'i-text' && obj.type !== 'text')) return showToast("Select text to format");
-            
-            const isItalic = obj.fontStyle === 'italic';
-            obj.set('fontStyle', isItalic ? 'normal' : 'italic');
-            document.getElementById('tool-italic').classList.toggle('active', !isItalic);
-            canvas.renderAll();
-        }
-
-        function adjustFontSize(delta) {
-            const input = document.getElementById('font-size');
-            let size = parseInt(input.value) + delta;
-            size = Math.max(8, Math.min(size, 100));
-            input.value = size;
-            updateSelectedText();
-        }
-
-        function initGlobalListeners() {
-            canvas.on('mouse:down', function (opt) {
-                if (currentTool === 'select' || opt.target) return;
-                const pointer = canvas.getPointer(opt.e);
-
-                if (currentTool === 'text') {
-                    const t = new fabric.IText('Add remarks...', {
-                        left: pointer.x, top: pointer.y,
-                        fontSize: parseInt(document.getElementById('font-size').value),
-                        fontFamily: 'Inter',
-                        fill: '#000000',
-                        cornerColor: '#6366f1',
-                        cornerSize: 8,
-                        transparentCorners: false
-                    });
-                    canvas.add(t).setActiveObject(t);
-                    setTool('select');
-                } else if (currentTool.startsWith('tick-')) {
-                    const color = currentTool.endsWith('green') ? '#059669' : '#000000';
-                    const tick = new fabric.Text('✔', {
-                        left: pointer.x, top: pointer.y,
-                        fontSize: 60,
-                        fill: color,
-                        fontWeight: 'bold'
-                    });
-                    canvas.add(tick).setActiveObject(tick);
-                    setTool('select');
-                }
-            });
-
-            canvas.on('object:added', () => isDirty = true);
-            canvas.on('object:modified', () => isDirty = true);
-            canvas.on('selection:created', () => document.getElementById('context-toolbar').classList.remove('hidden'));
-            canvas.on('selection:cleared', () => document.getElementById('context-toolbar').classList.add('hidden'));
-
-            // Step 5: Mouse Wheel Zoom
-            canvas.on('mouse:wheel', function (opt) {
-                var delta = opt.e.deltaY;
-                if (delta > 0) zoomOut(); else zoomIn();
-                opt.e.preventDefault();
-                opt.e.stopPropagation();
-            });
-
-            // Keyboard Shortcuts
-            window.addEventListener('keydown', (e) => {
-                if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
-            });
-
-            // Leave protection
-            window.addEventListener('beforeunload', (e) => {
-                if (isDirty) {
-                    e.preventDefault();
-                    e.returnValue = '';
-                }
-            });
-        }
-
-        function deleteSelected() {
-            canvas.getActiveObjects().forEach(o => { if (!o.isBackground) canvas.remove(o); });
-            canvas.discardActiveObject().renderAll();
-        }
-
-        function updateSelectedText() {
-            const size = parseInt(document.getElementById('font-size').value);
-            canvas.getActiveObjects().forEach(o => { if (o.type === 'i-text' || o.type === 'text') o.set('fontSize', size); });
-            canvas.renderAll();
-        }
-
-        // Premium Signature Logic (v15)
-        let sigType = 'draw';
-        let sigFont = 'Dancing Script';
-        let sigInk = '#000000';
-        let uploadedSigUrl = null;
-
-        function openSignatureModal() {
-            document.getElementById('sig-modal').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-
-            if (!sigPad) {
-                const c = document.getElementById('sig-pad');
-                // High-res initialization
-                const ratio = Math.max(window.devicePixelRatio || 1, 1);
-                c.width = c.offsetWidth * ratio;
-                c.height = c.offsetHeight * ratio;
-                c.getContext("2d").scale(ratio, ratio);
-
-                sigPad = new SignaturePad(c, {
-                    penColor: sigInk,
-                    minWidth: 1.5,
-                    maxWidth: 4.5
-                });
-
-                // Real-time Preview Fix (v16 compatible events)
-                sigPad.addEventListener("beginStroke", () => {
-                    document.getElementById('sig-draw-guide').classList.add('hidden');
-                });
-                sigPad.addEventListener("endStroke", () => {
-                    updateSigPreview();
-                });
-            } else {
-                resizeSigCanvas();
-            }
-        }
-
-        function resizeSigCanvas() {
-            if (!sigPad) return;
-            const c = document.getElementById('sig-pad');
-            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            if (c.width !== c.offsetWidth * ratio) {
-                const data = sigPad.toData();
-                c.width = c.offsetWidth * ratio;
-                c.height = c.offsetHeight * ratio;
-                c.getContext("2d").scale(ratio, ratio);
-                sigPad.clear();
-                sigPad.fromData(data);
-            }
-        }
-
-        function closeSignatureModal() {
-            document.getElementById('sig-modal').classList.add('hidden');
-            document.body.style.overflow = '';
-        }
-
-        function clearSig() {
-            sigPad.clear();
-            document.getElementById('sig-draw-guide').classList.remove('hidden');
-            updateSigPreview();
-        }
-
-        function switchSigTab(tab) {
-            sigType = tab;
-            document.querySelectorAll('.sig-tab').forEach(b => b.classList.toggle('active', b.id === `sig-tab-${tab}`));
-            ['draw', 'type', 'upload'].forEach(p => document.getElementById(`sig-panel-${p}`).classList.toggle('hidden', p !== tab));
-            updateSigPreview();
-        }
-
-        function setSigInk(color) {
-            sigInk = color;
-            sigPad.penColor = color;
-            document.querySelectorAll('[id^="ink-"]').forEach(b => b.classList.remove('active-ink', 'ring-2', 'ring-indigo-500'));
-            const btn = document.getElementById(`ink-${color === '#000000' ? 'black' : 'indigo'}`);
-            btn.classList.add('active-ink', 'ring-2', 'ring-indigo-500');
-            updateSigPreview();
-        }
-
-        function setSigFont(font) {
-            sigFont = font;
-            document.querySelectorAll('[id^="font-"]').forEach(b => b.classList.remove('active-font', 'ring-2', 'ring-indigo-500', 'border-indigo-200'));
-            const fontId = font.toLowerCase().split(' ')[0];
-            document.getElementById(`font-${fontId}`).classList.add('active-font', 'ring-2', 'ring-indigo-500', 'border-indigo-200');
-            updateSigPreview();
-        }
-
-        async function handleSigUpload(input) {
-            if (!input.files || !input.files[0]) return;
-
-            const loader = document.getElementById('sig-upload-loading');
-            loader.classList.remove('hidden'); loader.classList.add('flex');
-
-            const formData = new FormData();
-            formData.append('file', input.files[0]);
-
-            try {
-                const res = await fetch('/api/reports/remove-background', { method: 'POST', body: formData });
-                if (res.ok) {
-                    const blob = await res.blob();
-                    uploadedSigUrl = URL.createObjectURL(blob);
-                    updateSigPreview();
-                } else {
-                    const err = await res.json();
-                    showError(err.message || "Quality too low. Use light background.");
-                }
-            } catch (e) {
-                showError("Neural engine unavailable.");
-            } finally {
-                loader.classList.add('hidden'); loader.classList.remove('flex');
-            }
-        }
-
-        function updateSigPreview() {
-            const preview = document.getElementById('sig-preview');
-            preview.innerHTML = '';
-            let data = null;
-
-            if (sigType === 'draw' && sigPad && !sigPad.isEmpty()) {
-                data = sigPad.toDataURL("image/png");
-            } else if (sigType === 'type') {
-                const text = document.getElementById('sig-type-input').value.trim();
-                if (text) data = createTextSignature(text);
-            } else if (sigType === 'upload' && uploadedSigUrl) {
-                data = uploadedSigUrl;
-            }
-
-            if (data) {
-                const img = document.createElement('img');
-                img.src = data;
-                img.className = "max-w-full max-h-64 object-contain animate-in zoom-in-95 duration-300 drop-shadow-2xl";
-                preview.appendChild(img);
-            } else {
-                preview.innerHTML = `
-                    <div class="opacity-10 text-center space-y-4">
-                        <i class="fas fa-stamp text-7xl"></i>
-                        <p class="text-xs font-black uppercase tracking-[1em]">ID Pending</p>
-                    </div>
-                `;
-            }
-        }
-
-        function createTextSignature(text) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 800; tempCanvas.height = 300;
-            const ctx = tempCanvas.getContext('2d');
-            ctx.clearRect(0, 0, 800, 300);
-            ctx.font = `italic 110px "${sigFont}"`;
-            ctx.fillStyle = sigInk;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = "rgba(0,0,0,0.1)";
-            ctx.shadowBlur = 10;
-            ctx.fillText(text, 400, 150);
-            return tempCanvas.toDataURL();
-        }
-
-        function applySignature() {
-            const previewImg = document.getElementById('sig-preview').querySelector('img');
-            if (!previewImg) return showError("Verification required. Please provide your signature.");
-
-            fabric.Image.fromURL(previewImg.src, function (img) {
-                const bgImg = canvas.getObjects('image').find(o => o.isBackground);
-                if (bgImg) {
-                    const targetW = bgImg.width * 0.25;
-                    img.scale(targetW / img.width);
-                } else {
-                    img.scale(0.6);
-                }
-
-                canvas.add(img).centerObject(img).setActiveObject(img).renderAll();
-                closeSignatureModal();
-                setTool('select');
-                showToast("Signature Authenticated & Placed");
-            });
-        }
-
-        // UI Helpers
-        function toggleDownloadMenu() { document.getElementById('download-menu').classList.toggle('hidden'); }
-        function showSpinner(show) { document.getElementById('loader').classList.toggle('hidden', !show); }
-        function showError(msg) { alert(msg); }
-        function showToast(msg) {
-            const t = document.createElement('div');
-            t.className = "fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-gray-900 text-white text-xs font-bold rounded-2xl shadow-2xl z-[500] animate-in slide-in-from-bottom-5";
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-        function handleBack() {
-            if (isDirty && !confirm("Unsaved changes! Exit anyway?")) return;
-            window.location.href = `/file/${FILE_ID}`;
-        }
-
-        // Multi-Download Stub
-        function openMultiDownload() {
-            const list = document.getElementById('multi-dl-list');
-            list.innerHTML = remarksList.map(p => `
-                <div class="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-3xl transition-colors">
-                    <input type="checkbox" checked class="w-5 h-5 accent-indigo-600 report-checkbox" data-num="${p.page_number}">
-                    <span class="text-xs font-bold text-gray-700">Page ${p.page_number}</span>
-                </div>
-            `).join('');
-            document.getElementById('multi-dl-modal').classList.remove('hidden');
-        }
-        function closeMultiDownload() { document.getElementById('multi-dl-modal').classList.add('hidden'); }
-        function selectAllRemarks(val) { document.querySelectorAll('.report-checkbox').forEach(c => c.checked = val); }
-        async function generateCombinedPDF() {
-            showToast("Generating Bundle...", "info");
-            const nums = [...document.querySelectorAll('.report-checkbox:checked')].map(c => parseInt(c.dataset.num));
-            const { jsPDF } = window.jspdf;
-            let pdf = null;
-
-            for (let num of nums) {
-                const res = await fetch(`/image/${FILE_ID}/${num}`);
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const img = await new Promise(r => fabric.Image.fromURL(url, r));
-
-                if (!pdf) {
-                    pdf = new jsPDF(img.width > img.height ? 'l' : 'p', 'px', [img.width, img.height]);
-                } else {
-                    pdf.addPage([img.width, img.height], img.width > img.height ? 'l' : 'p');
-                }
-
-                // Here we would ideally load the edited state and render it, 
-                // but since /image/ already serves edited PNGs, we can just use the image directly!
-                const canvasData = await new Promise(async (resolve) => {
-                    const tempCanvas = document.createElement('canvas');
-                    const ctx = tempCanvas.getContext('2d');
-                    const i = new Image();
-                    i.onload = () => {
-                        tempCanvas.width = i.width;
-                        tempCanvas.height = i.height;
-                        ctx.drawImage(i, 0, 0);
-                        resolve(tempCanvas.toDataURL('image/png'));
-                    };
-                    i.src = url;
-                });
-
-                pdf.addImage(canvasData, 'PNG', 0, 0, img.width, img.height);
-            }
-            pdf.save(`Combined_Reports_{{ file.file_name }}.pdf`);
-            closeMultiDownload();
-        }
-    </script>
+        
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onload = (f) => placeSigImage(f.target.result);
+        reader.readAsDataURL(blob);
+      } catch (err) {
+        alert('Network error during background removal. Falling back to original.');
+        fallbackLoadOriginal(file);
+      }
+    } else {
+      fallbackLoadOriginal(file);
+    }
+    
+    e.target.value = ''; // Reset input
+  }
+
+  function fallbackLoadOriginal(file) {
+    const reader = new FileReader();
+    reader.onload = (f) => placeSigImage(f.target.result);
+    reader.readAsDataURL(file);
+  }
+
+  function openSignatureModal() { 
+    document.getElementById('sig-modal').classList.remove('hidden'); 
+    switchSigTab('draw'); // Default to draw
+    const firstTab = document.querySelector('.sig-tab');
+    if(firstTab) firstTab.classList.add('active');
+  }
+  function closeSignatureModal() { document.getElementById('sig-modal').classList.add('hidden'); }
+
+  async function saveReport() {
+    const btn = document.getElementById('btn-save'); btn.disabled=true;
+    try {
+      const bg = canvas.getObjects('image').find(o=>o.isBackground);
+      const oldZ=canvas.getZoom(), oldW=canvas.width, oldH=canvas.height;
+      canvas.setDimensions({width:bg.width, height:bg.height}).setZoom(1/baseScale);
+      const imgData = canvas.toDataURL({format:'png', quality:1});
+      canvas.setDimensions({width:oldW, height:oldH}).setZoom(oldZ);
+      
+      const res = await fetch(`/api/file/${FILE_ID}/save-canvas`, {
+         method:'POST',
+         headers:{'Content-Type':'application/json'},
+         body: JSON.stringify({ canvas_state: JSON.stringify(canvas.toJSON()), page_number: remarksList[currentIndex].page_number, image_data: imgData })
+      });
+      if ((await res.json()).success) { alert('Saved!'); isDirty=false; }
+    } finally { btn.disabled=false; }
+  }
+
+  function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const bg = canvas.getObjects('image').find(o=>o.isBackground);
+    const pdf = new jsPDF(bg.width>bg.height?'l':'p', 'px', [bg.width, bg.height]);
+    const oldZ=canvas.getZoom(), oldW=canvas.width, oldH=canvas.height;
+    canvas.setDimensions({width:bg.width, height:bg.height}).setZoom(1/baseScale);
+    pdf.addImage(canvas.toDataURL({format:'png', quality:1}),'PNG',0,0,bg.width,bg.height);
+    canvas.setDimensions({width:oldW, height:oldH}).setZoom(oldZ);
+    pdf.save(`InspectAI_P${remarksList[currentIndex].page_number}.pdf`);
+  }
+
+  // Hotkeys
+  document.addEventListener('keydown', e => {
+     if(e.key==='Delete') { canvas.getActiveObjects().forEach(o=>{if(!o.isBackground)canvas.remove(o);}); canvas.discardActiveObject().renderAll(); }
+     if(e.ctrlKey && e.key==='s'){ e.preventDefault(); saveReport(); }
+  });
+</script>
 </body>
-
 </html>
