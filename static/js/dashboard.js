@@ -1,5 +1,4 @@
-// Dashboard JavaScript functionality
-
+// Dashboard JavaScript functionality - Redesigned for Vanilla CSS
 class Dashboard {
     constructor() {
         this.currentPage = 1;
@@ -19,7 +18,6 @@ class Dashboard {
     }
     
     setupEventListeners() {
-        // Search functionality
         const searchInput = document.getElementById('search-input');
         if (searchInput) {
             searchInput.addEventListener('input', this.debounce(() => {
@@ -29,7 +27,6 @@ class Dashboard {
             }, 300));
         }
         
-        // Date filter functionality
         const dateFilter = document.getElementById('date-filter');
         if (dateFilter) {
             dateFilter.addEventListener('change', () => {
@@ -39,10 +36,10 @@ class Dashboard {
             });
         }
         
-        // Pagination event delegation
         document.getElementById('pagination-controls').addEventListener('click', (e) => {
-            if (e.target.classList.contains('page-btn')) {
-                this.currentPage = parseInt(e.target.dataset.page);
+            const btn = e.target.closest('.page-btn');
+            if (btn) {
+                this.currentPage = parseInt(btn.dataset.page);
                 this.loadFiles();
             }
         });
@@ -64,7 +61,6 @@ class Dashboard {
         try {
             const response = await fetch('/api/stats');
             const data = await response.json();
-            
             if (data.success) {
                 this.updateStatsDisplay(data.stats);
             }
@@ -78,36 +74,16 @@ class Dashboard {
         document.getElementById('total-pages').textContent = stats.total_pages.toLocaleString();
         document.getElementById('pages-remarks').textContent = stats.pages_with_remarks.toLocaleString();
     }
-    
-    validateDateFormat() {
-        if (!this.searchDate) return true;
-        
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!dateRegex.test(this.searchDate)) {
-            this.showNotification('Please use YYYY-MM-DD date format', 'error');
-            return false;
-        }
-        return true;
-    }
 
     async loadFiles() {
-        if (!this.validateDateFormat()) {
-            return;
-        }
-
         this.showLoading();
-        
         try {
             const params = new URLSearchParams({
                 page: this.currentPage,
                 per_page: this.perPage,
                 search: this.searchTerm
             });
-            
-            // Add date filter if set
-            if (this.searchDate) {
-                params.append('date', this.searchDate);
-            }
+            if (this.searchDate) params.append('date', this.searchDate);
             
             const response = await fetch(`/api/files?${params}`);
             const data = await response.json();
@@ -122,19 +98,27 @@ class Dashboard {
         } catch (error) {
             console.error('Error loading files:', error);
             this.hideLoading();
-            this.showError('Failed to load files');
+            this.showError('Failed to synchronize with server');
         }
     }
     
     renderFiles() {
         const tbody = document.getElementById('files-tbody');
-        
         if (this.files.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="py-8 text-center text-gray-500">
-                        <i class="fas fa-inbox text-3xl mb-2"></i>
-                        <p>No files found</p>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="fas fa-folder-open"></i>
+                            </div>
+                            <p style="font-weight: 700; font-size: var(--text-base); margin-bottom: 0.5rem; color: var(--text-600);">No reports found</p>
+                            <p style="font-size: var(--text-sm); color: var(--text-faint); margin-bottom: 1.25rem;">Upload an inspection report to get started.</p>
+                            <a href="/upload" class="btn btn-primary btn-sm">
+                                <i class="fas fa-cloud-arrow-up"></i>
+                                Upload Report
+                            </a>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -143,52 +127,46 @@ class Dashboard {
         
         tbody.innerHTML = this.files.map(file => this.renderFileRow(file)).join('');
         
-        // Update files count
         const startIndex = (this.currentPage - 1) * this.perPage + 1;
         const endIndex = Math.min(this.currentPage * this.perPage, this.totalFiles);
         document.getElementById('files-count').textContent = 
-            `Showing ${startIndex}-${endIndex} of ${this.totalFiles} files`;
+            `Showing ${startIndex} - ${endIndex} of ${this.totalFiles} repositories`;
     }
     
     renderFileRow(file) {
-        const uploadDate = new Date(file.upload_timestamp).toLocaleDateString();
-        const criticalityClass = this.getCriticalityClass(file.criticality_level);
-        
+        const uploadDate = new Date(file.upload_timestamp).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric'
+        });
+        const criticalityBadge = this.getCriticalityBadge(file.criticality_level);
+        const remarksPct = file.total_pages > 0
+            ? Math.round((file.pages_with_remarks / file.total_pages) * 100)
+            : 0;
+
         return `
-            <tr class="border-b border-gray-200 hover:bg-gray-50">
-                <td class="py-4 px-6">
-                    <a href="/file/${file.file_id}" class="font-medium text-gray-800 hover:text-green-600">
+            <tr>
+                <td>
+                    <a href="/file/${file.file_id}" class="file-link">
                         ${this.escapeHtml(file.file_name)}
                     </a>
                 </td>
-                <td class="py-4 px-6">
-                    <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs uppercase">
-                        ${file.file_type}
-                    </span>
+                <td>
+                    <span class="badge badge-gray" style="font-size:0.6rem;">${file.file_type.toUpperCase()}</span>
                 </td>
-                <td class="py-4 px-6 text-gray-600">${uploadDate}</td>
-                <td class="py-4 px-6 font-medium">${file.total_pages}</td>
-                <td class="py-4 px-6">
-                    <span class="font-medium ${file.pages_with_remarks > 0 ? 'text-orange-600' : 'text-green-600'}">
-                        ${file.pages_with_remarks}
-                    </span>
+                <td style="color:var(--text-faint); font-weight:600; white-space:nowrap;">${uploadDate}</td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span style="font-weight:800; font-family:'Sora',sans-serif;">${file.total_pages}</span>
+                        <span style="font-size:var(--text-xs); color:var(--text-faint); font-weight:600;">pages</span>
+                    </div>
                 </td>
-                <td class="py-4 px-6">
-                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${criticalityClass}">
-                        ${file.criticality_level}
-                    </span>
-                </td>
-                <td class="py-4 px-6 text-right">
-                    <div class="flex justify-end space-x-2">
-                        <a href="/file/${file.file_id}" 
-                           class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-green-600 hover:text-white transition"
-                           title="View Details">
-                            <i class="fas fa-eye text-sm"></i>
+                <td>${criticalityBadge}</td>
+                <td style="text-align:right;">
+                    <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+                        <a href="/file/${file.file_id}" class="btn btn-secondary btn-sm" title="View report">
+                            <i class="fas fa-eye"></i>
                         </a>
-                        <button onclick="dashboard.deleteFile('${file.file_id}')"
-                                class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-red-500 hover:bg-red-100 transition"
-                                title="Delete File">
-                            <i class="fas fa-trash text-sm"></i>
+                        <button onclick="dashboard.deleteFile('${file.file_id}')" class="btn btn-danger btn-sm" title="Delete report">
+                            <i class="fas fa-trash-alt"></i>
                         </button>
                     </div>
                 </td>
@@ -196,141 +174,119 @@ class Dashboard {
         `;
     }
     
-    getCriticalityClass(level) {
+    getCriticalityBadge(level) {
         switch(level) {
-            case 'RED': return 'bg-red-100 text-red-800';
-            case 'ORANGE': return 'bg-orange-100 text-orange-800';
-            case 'GREEN': return 'bg-green-100 text-green-800';
-            default: return 'bg-gray-100 text-gray-800';
+            case 'RED':    return '<span class="badge badge-red"><i class="fas fa-circle" style="font-size:.4rem;"></i> Critical</span>';
+            case 'ORANGE': return '<span class="badge badge-orange"><i class="fas fa-circle" style="font-size:.4rem;"></i> Warning</span>';
+            case 'GREEN':  return '<span class="badge badge-green"><i class="fas fa-circle" style="font-size:.4rem;"></i> Standard</span>';
+            default:       return `<span class="badge badge-gray">${level}</span>`;
         }
     }
     
     renderPagination() {
         const totalPages = Math.ceil(this.totalFiles / this.perPage);
-        const paginationContainer = document.getElementById('pagination-controls');
-        
+        const container = document.getElementById('pagination-controls');
         if (totalPages <= 1) {
-            paginationContainer.innerHTML = '';
+            container.innerHTML = '';
             return;
         }
         
-        let paginationHTML = '';
-        
-        // Previous button
-        paginationHTML += `
-            <button class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 page-btn ${this.currentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}"
-                    ${this.currentPage === 1 ? 'disabled' : ''}
-                    data-page="${this.currentPage - 1}">
-                <i class="fas fa-chevron-left text-xs"></i>
+        let html = '';
+        html += `
+            <button class="btn btn-secondary page-btn" style="padding: 0.5rem 0.75rem;" ${this.currentPage === 1 ? 'disabled' : ''} data-page="${this.currentPage - 1}">
+                <i class="fas fa-chevron-left" style="font-size: 0.75rem;"></i>
             </button>
         `;
         
-        // Page numbers
         for (let i = 1; i <= totalPages; i++) {
             if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
-                paginationHTML += `
-                    <button class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center page-btn ${i === this.currentPage ? 'bg-green-600 text-white border-green-600' : 'text-gray-600 hover:bg-gray-100'}"
-                            data-page="${i}">
+                html += `
+                    <button class="btn ${i === this.currentPage ? 'btn-primary' : 'btn-secondary'} page-btn" style="min-width: 32px; padding: 0.5rem;" data-page="${i}">
                         ${i}
                     </button>
                 `;
             } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
-                paginationHTML += `<span class="px-2 text-gray-500">...</span>`;
+                html += `<span style="color: var(--text-muted); align-self: center;">...</span>`;
             }
         }
         
-        // Next button
-        paginationHTML += `
-            <button class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 page-btn ${this.currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : ''}"
-                    ${this.currentPage === totalPages ? 'disabled' : ''}
-                    data-page="${this.currentPage + 1}">
-                <i class="fas fa-chevron-right text-xs"></i>
+        html += `
+            <button class="btn btn-secondary page-btn" style="padding: 0.5rem 0.75rem;" ${this.currentPage === totalPages ? 'disabled' : ''} data-page="${this.currentPage + 1}">
+                <i class="fas fa-chevron-right" style="font-size: 0.75rem;"></i>
             </button>
         `;
-        
-        paginationContainer.innerHTML = paginationHTML;
+        container.innerHTML = html;
     }
     
     async deleteFile(fileId) {
-        if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
-            return;
-        }
-        
+        if (!confirm('Permanent deletion cannot be undone. Proceed?')) return;
         try {
-            const response = await fetch(`/api/file/${fileId}/delete`, {
-                method: 'DELETE'
-            });
+            const response = await fetch(`/api/file/${fileId}/delete`, { method: 'DELETE' });
             const data = await response.json();
-            
             if (data.success) {
-                this.showNotification('File deleted successfully', 'success');
+                this.showNotification('Data purged successfully', 'success');
                 this.loadFiles();
                 this.loadStats();
-            } else {
-                this.showNotification('Error deleting file: ' + data.message, 'error');
             }
         } catch (error) {
-            this.showNotification('Error deleting file: ' + error.message, 'error');
+            this.showNotification('Purge operation failed', 'error');
         }
     }
     
     showLoading() {
-        document.getElementById('loading-spinner').classList.remove('hidden');
-        document.getElementById('files-tbody').innerHTML = '';
+        const spinner = document.getElementById('loading-spinner');
+        if (spinner) spinner.style.display = 'flex';
+        const tbody = document.getElementById('files-tbody');
+        if (tbody) tbody.style.opacity = '0.4';
     }
-    
+
     hideLoading() {
-        document.getElementById('loading-spinner').classList.add('hidden');
+        const spinner = document.getElementById('loading-spinner');
+        if (spinner) spinner.style.display = 'none';
+        const tbody = document.getElementById('files-tbody');
+        if (tbody) tbody.style.opacity = '1';
     }
     
     showError(message) {
         const tbody = document.getElementById('files-tbody');
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="py-8 text-center text-red-500">
-                    <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
-                    <p>${message}</p>
-                    <button onclick="dashboard.loadFiles()" class="mt-2 text-sm text-green-600 hover:text-green-700">
-                        <i class="fas fa-redo mr-1"></i>Retry
-                    </button>
+                <td colspan="6" style="padding: 4rem; text-align: center; color: var(--danger);">
+                    <i class="fas fa-circle-exclamation" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                    <p style="font-weight: 700;">${message}</p>
+                    <button onclick="dashboard.loadFiles()" class="btn btn-ghost" style="margin-top: 1rem;">Retry Connection</button>
                 </td>
             </tr>
         `;
     }
     
     showNotification(message, type) {
-        const notification = document.createElement('div');
-        notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg text-white ${
-            type === 'success' ? 'bg-green-600' : 'bg-red-600'
-        } z-50`;
-        notification.innerHTML = `
-            <div class="flex items-center">
-                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i>
-                <span>${message}</span>
-            </div>
-        `;
-        
-        document.body.appendChild(notification);
-        
+        const icons = { success:'fa-check-circle', error:'fa-circle-exclamation', info:'fa-info-circle' };
+        const el = document.createElement('div');
+        el.className = `toast ${type}`;
+        el.innerHTML = `<i class="fas ${icons[type] || icons.info}" style="flex-shrink:0;"></i><span>${message}</span>`;
+
+        let container = document.querySelector('.toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+        container.appendChild(el);
+
         setTimeout(() => {
-            notification.remove();
-        }, 3000);
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(8px)';
+            el.style.transition = 'all 0.3s ease';
+            setTimeout(() => el.remove(), 300);
+        }, 3200);
     }
     
     escapeHtml(unsafe) {
-        return unsafe
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+        return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 }
 
-// Initialize dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    if (!document.getElementById('files-tbody') || !document.getElementById('pagination-controls')) {
-        return;
-    }
-    window.dashboard = new Dashboard();
+    if (document.getElementById('files-tbody')) window.dashboard = new Dashboard();
 });
